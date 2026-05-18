@@ -148,15 +148,15 @@ daoubot start                          # 폴링 봇 실행
 uv run --with python-daouoffice-bot examples/bot-echobot/bot.py
 ```
 
-## AI로 봇 만들기 (Claude Code 스킬)
+## AI로 봇 만들기 (에이전트 스킬)
 
-배포용 Claude Code **스킬**이 저장소에 포함돼 있어, AI에게 "다우오피스 봇 만들어줘"라고 시켜 스캐폴딩·확장할 수 있습니다.
+표준 **에이전트 스킬**(`SKILL.md` + frontmatter + 번들 파일)이 저장소에 포함돼 있어, AI에게 "다우오피스 봇 만들어줘"라고 시켜 스캐폴딩·확장할 수 있습니다. 특정 도구 전용이 아니라 이 스킬 포맷을 지원하는 어떤 에이전트 런타임(Claude.ai·Claude Code·Claude API/Agent SDK 등)에도 그대로 이식됩니다.
 
 ```
 skills/daouoffice-bot/   # SKILL.md + reference.md + scaffold.py
 ```
 
-설치(둘 중 하나) — `~/.claude/skills/` 로 복사하면 전역에서 사용:
+설치 — 에이전트의 스킬 디렉터리에 폴더를 놓으면 됩니다. Claude 계열 런타임은 `~/.claude/skills/`(전역), 다른 런타임은 각자의 스킬 로더 규약을 따르세요:
 
 ```bash
 cp -r skills/daouoffice-bot ~/.claude/skills/        # 수동 복사
@@ -168,7 +168,7 @@ npx skills add junsik/python-daouoffice-bot --skill daouoffice-bot
 
 ### 적용법 (설치 후)
 
-스킬은 별도 명령이 아니라 **요청 내용으로 자동 발동**합니다. 봇을 만들 작업 폴더에서 Claude Code(또는 스킬을 지원하는 Claude.ai/Claude Desktop)를 열고, 그냥 평소처럼 말하면 됩니다:
+스킬은 별도 명령이 아니라 **요청 내용으로 자동 발동**합니다. 봇을 만들 작업 폴더에서 스킬 포맷을 지원하는 에이전트(Claude Code·Claude.ai·Claude Desktop·Agent SDK 등)를 열고, 그냥 평소처럼 말하면 됩니다:
 
 ```text
 다우오피스 봇 만들어줘. 우리 회사는 acme.daouoffice.com 이고,
