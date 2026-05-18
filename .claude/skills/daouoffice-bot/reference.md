@@ -1,7 +1,6 @@
 # Reference — python-daouoffice-bot
 
-Condensed, self-contained API + gotchas for building bots. (Repo docs:
-`docs/ARCHITECTURE.md`, `docs/0*.md`, `examples/`.)
+Condensed, self-contained API + gotchas for building bots. (Repo docs: `docs/ARCHITECTURE.md`, `docs/0*.md`, `examples/`.)
 
 ## Public API (`from daouoffice import ...`)
 
@@ -19,47 +18,25 @@ Condensed, self-contained API + gotchas for building bots. (Repo docs:
 | `BotIdentity` | Resolved bot identity (user_id, company_*). |
 | `DaouAuthError` / `DaouConfigError` | Exceptions. |
 
-`NewMessage` fields: `room_id`, `room_type` (`SINGLE`|`GROUP`),
-`sender_user_id`, `sender_name`, `message_text` (human-readable),
-`message_id`, `created_at`, `raw_text` (original incl. `{{...}}`),
-`mentions: list[str]`, `mentions_me: bool`, `mention_all: bool`.
+`NewMessage` fields: `room_id`, `room_type` (`SINGLE`|`GROUP`), `sender_user_id`, `sender_name`, `message_text` (human-readable), `message_id`, `created_at`, `raw_text` (original incl. `{{...}}`), `mentions: list[str]`, `mentions_me: bool`, `mention_all: bool`.
 
-`on_message`: `Callable[[NewMessage], str | None | Awaitable[...]]`. Return a
-string to reply, `None` for no reply. Sync or async.
+`on_message`: `Callable[[NewMessage], str | None | Awaitable[...]]`. Return a string to reply, `None` for no reply. Sync or async.
 
 ## CLI (`daoubot`)
 
-`discover --base-url URL` · `login` · `whoami` · `rooms` ·
-`room create --users a,b [--name N] [--type GROUP]` · `room open <id>` ·
-`send <room_id> "<text>"` · `start`. Precedence: flag > env > profile.
+`discover --base-url URL` · `login` · `whoami` · `rooms` · `room create --users a,b [--name N] [--type GROUP]` · `room open <id>` · `send <room_id> "<text>"` · `start`. Precedence: flag > env > profile.
 
 ## Gotchas (encode these in any bot you build)
 
-1. **Dedicated account.** Read state is account-global; the bot's `mark_read`
-   clears a human's unread. Never share the account with a person.
-2. **At-least-once + idempotency.** A message is re-delivered until the handler
-   returns without raising; restart/crash can re-deliver. Make side effects
-   idempotent. Repeated failures past `max_attempts` (default 5) are skipped
-   as "poison". Fire-and-forget = swallow errors in the handler.
-3. **Allowlist for groups.** Without `RoomRouter`/`only_when_mentioned` the bot
-   replies to every message in every room it is invited to (spam/footgun).
-4. **Mentions are inline text tokens** (`{{uuid::USER::@name::id}}` /
-   `{{uuid::ALL::@ALL}}`), broadcast to the whole room (not private). Already
-   parsed into `mentions*`; don't regex `message_text` yourself.
-5. **Token ~30 min, auto re-login.** No refresh endpoint exists; the client
-   re-logs in on 401 using the credentials (so `DaouBot` needs them, not just
-   a token).
-6. **Restart-resume is bounded** by the ~20-message history window — long
-   downtime loses out-of-window messages (no "since id" API).
-7. **Not supported by DaouOffice:** webhooks, inline keyboards/buttons, inline
-   queries, slash-command framework, BotFather, WebSocket (endpoint observed
-   but unimplemented). Do not fabricate these.
-8. **Don't run two bot processes on one account** — duplicate handling +
-   `mark_read` races. Scale with `RoomRouter` in one process.
-9. **Files are attachments, not inline.** MD/HTML is not rendered in chat;
-   `send_file(room, path)` uploads it as a downloadable attachment. Good for
-   an LLM-generated newsletter: write `news.md`/`.html`, then `send_file`.
-   Attachment contracts are SAZ-derived and **live-unverified**.
+1. **Dedicated account.** Read state is account-global; the bot's `mark_read` clears a human's unread. Never share the account with a person.
+2. **At-least-once + idempotency.** A message is re-delivered until the handler returns without raising; restart/crash can re-deliver. Make side effects idempotent. Repeated failures past `max_attempts` (default 5) are skipped as "poison". Fire-and-forget = swallow errors in the handler.
+3. **Allowlist for groups.** Without `RoomRouter`/`only_when_mentioned` the bot replies to every message in every room it is invited to (spam/footgun).
+4. **Mentions are inline text tokens** (`{{uuid::USER::@name::id}}` / `{{uuid::ALL::@ALL}}`), broadcast to the whole room (not private). Already parsed into `mentions*`; don't regex `message_text` yourself.
+5. **Token ~30 min, auto re-login.** No refresh endpoint exists; the client re-logs in on 401 using the credentials (so `DaouBot` needs them, not just a token).
+6. **Restart-resume is bounded** by the ~20-message history window — long downtime loses out-of-window messages (no "since id" API).
+7. **Not supported by DaouOffice:** webhooks, inline keyboards/buttons, inline queries, slash-command framework, BotFather, WebSocket (endpoint observed but unimplemented). Do not fabricate these.
+8. **Don't run two bot processes on one account** — duplicate handling + `mark_read` races. Scale with `RoomRouter` in one process.
+9. **Files are attachments, not inline.** MD/HTML is not rendered in chat; `send_file(room, path)` uploads it as a downloadable attachment. Good for an LLM-generated newsletter: write `news.md`/`.html`, then `send_file`. Attachment contracts are SAZ-derived and **live-unverified**.
 
 ## Minimal working bot
 
@@ -84,6 +61,4 @@ async def main() -> None:
 asyncio.run(main())
 ```
 
-Explicit construction keeps the required inputs visible. `DaouBot.from_env()`
-is a terse shortcut (env/profile) for production/CLI when readability is not
-the goal.
+Explicit construction keeps the required inputs visible. `DaouBot.from_env()` is a terse shortcut (env/profile) for production/CLI when readability is not the goal.

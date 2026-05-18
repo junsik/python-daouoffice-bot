@@ -11,30 +11,19 @@ license: MIT
 
 # DaouOffice Bot Builder
 
-You are designing a bot **to the user's actual requirements** on
-`python-daouoffice-bot` (an unofficial, reverse-engineered SDK). This skill is
-the SDK author's distilled knowledge: do not guess from a template menu —
-elicit what the user needs, then assemble the right bot from primitives while
-obeying the invariants below. `reference.md` has the full API + gotchas.
+You are designing a bot **to the user's actual requirements** on `python-daouoffice-bot` (an unofficial, reverse-engineered SDK). This skill is the SDK author's distilled knowledge: do not guess from a template menu — elicit what the user needs, then assemble the right bot from primitives while obeying the invariants below. `reference.md` has the full API + gotchas.
 
 ## Step 1 — Elicit requirements (ask, don't assume)
 
 Before writing code, get answers (ask only what's unknown):
 
-1. **Tenant + account**: their `https://<co>.daouoffice.com`, and a
-   **dedicated** automation account (not a human's — read state is
-   account-global). If they lack `company_id`, plan a `daoubot discover`.
-2. **Scope**: which rooms? a specific room/list, only 1:1 DMs, or any room it
-   is added to? (drives RoomRouter vs not)
-3. **Trigger**: respond to every message, only `!commands`, only when
-   @-mentioned, on a keyword, or on a schedule/external event (proactive)?
-4. **Logic**: stateless reply, per-room conversation state, or calls an
-   external service / LLM?
-5. **Side effects**: does handling cause non-idempotent actions (creating
-   tickets, sending mail)? → must be made idempotent (at-least-once).
+1. **Tenant + account**: their `https://<co>.daouoffice.com`, and a **dedicated** automation account (not a human's — read state is account-global). If they lack `company_id`, plan a `daoubot discover`.
+2. **Scope**: which rooms? a specific room/list, only 1:1 DMs, or any room it is added to? (drives RoomRouter vs not)
+3. **Trigger**: respond to every message, only `!commands`, only when @-mentioned, on a keyword, or on a schedule/external event (proactive)?
+4. **Logic**: stateless reply, per-room conversation state, or calls an external service / LLM?
+5. **Side effects**: does handling cause non-idempotent actions (creating tickets, sending mail)? → must be made idempotent (at-least-once).
 
-If the user is vague ("make an AI bot"), pick the smallest design that meets
-the stated goal and state the assumptions; don't invent scope.
+If the user is vague ("make an AI bot"), pick the smallest design that meets the stated goal and state the assumptions; don't invent scope.
 
 ## Step 2 — Map requirements → design
 
@@ -49,40 +38,27 @@ the stated goal and state the assumptions; don't invent scope.
 | Proactive/scheduled send | run a separate task using `bot.send_message(room_id, text)`; polling stays for inbound |
 | Survive restarts | default `FileCursorStore` already does; nothing to do |
 
-Compose these — they are orthogonal (e.g. `RoomRouter` whose group handler is
-`only_when_mentioned(llm_handler)` with per-room history).
+Compose these — they are orthogonal (e.g. `RoomRouter` whose group handler is `only_when_mentioned(llm_handler)` with per-room history).
 
 ## Step 3 — Assemble (start from the skeleton, then build)
 
-`scaffold.py` prints **only** the correct boilerplate (env/profile config,
-graceful run loop, empty handler). It does not choose the design — you do, in
-the handler, from Step 2.
+`scaffold.py` prints **only** the correct boilerplate (env/profile config, graceful run loop, empty handler). It does not choose the design — you do, in the handler, from Step 2.
 
 ```bash
 python .claude/skills/daouoffice-bot/scaffold.py > bot.py
 ```
 
-Then implement the handler for the user's requirement. Construct `DaouBot`
-**explicitly** with the four `DAOU_*` settings read from the environment, so
-the generated bot is self-documenting (no hidden config). Read room ids from
-env/args too. (`DaouBot.from_env(...)` is an optional terse shortcut for
-production/CLI — fine, but examples favor the explicit form for readability.)
+Then implement the handler for the user's requirement. Construct `DaouBot` **explicitly** with the four `DAOU_*` settings read from the environment, so the generated bot is self-documenting (no hidden config). Read room ids from env/args too. (`DaouBot.from_env(...)` is an optional terse shortcut for production/CLI — fine, but examples favor the explicit form for readability.)
 
 ## Step 4 — Invariants you MUST keep (the SDK's hard rules)
 
-- **No hard-coded** base_url/company_id/credentials/room ids in any code you
-  write — read them from env (visibly). No real secrets in code or commits.
-- **Idempotent handlers.** Delivery is at-least-once (not configurable);
-  restart/crash can re-deliver. Guard non-idempotent side effects.
-- **Don't spam.** Any bot reachable from group rooms uses `RoomRouter` and/or
-  `only_when_mentioned` so it doesn't reply to everything everywhere.
+- **No hard-coded** base_url/company_id/credentials/room ids in any code you write — read them from env (visibly). No real secrets in code or commits.
+- **Idempotent handlers.** Delivery is at-least-once (not configurable); restart/crash can re-deliver. Guard non-idempotent side effects.
+- **Don't spam.** Any bot reachable from group rooms uses `RoomRouter` and/or `only_when_mentioned` so it doesn't reply to everything everywhere.
 - **Dedicated account only** — the bot's `mark_read` clears a human's unread.
 - Handler returns fast or is `async`; blocking it stalls all polling.
 - One bot process per account (duplicate handling + `mark_read` races).
-- DaouOffice has **no** webhooks, inline keyboards, slash-command framework,
-  BotFather, or working WebSocket. If the user asks for these, say so — never
-  fabricate an API. Mentions are pre-parsed (`msg.mentions_me/.mention_all/
-  .mentions`, `.raw_text`); don't regex `message_text`.
+- DaouOffice has **no** webhooks, inline keyboards, slash-command framework, BotFather, or working WebSocket. If the user asks for these, say so — never fabricate an API. Mentions are pre-parsed (`msg.mentions_me/.mention_all/ .mentions`, `.raw_text`); don't regex `message_text`.
 
 ## Step 5 — Onboard & verify
 
@@ -94,7 +70,4 @@ daoubot send <room_id> "smoke test" # confirm live access BEFORE long-run
 python bot.py
 ```
 
-State plainly that contracts are tested but live behavior depends on the
-tenant. See `reference.md` for the API surface, the mention/auth/delivery
-mechanics, and all gotchas; the SDK repo has `docs/ARCHITECTURE.md` (design
-rationale) and runnable `examples/` to copy patterns from.
+State plainly that contracts are tested but live behavior depends on the tenant. See `reference.md` for the API surface, the mention/auth/delivery mechanics, and all gotchas; the SDK repo has `docs/ARCHITECTURE.md` (design rationale) and runnable `examples/` to copy patterns from.
