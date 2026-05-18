@@ -44,12 +44,29 @@ Gate to actually cut 0.1.0:
   past the ~20-message window when resuming from a saved cursor.
 - `SqliteCursorStore` (the `CursorStore` interface already supports it) for
   multi-room bots that outgrow a JSON file.
+- **Concurrency model**: today a slow/awaiting handler blocks the whole poll
+  cycle (all rooms). Dispatch should be **per-room ordered but cross-room
+  concurrent** (bounded), so one busy room can't stall the rest.
 
 ## 0.3.x — Capability expansion (only already-observed endpoints)
 
 Grounded in the reverse-engineered docs; each needs a real-traffic check
 before being called supported.
 
+- **Inbound message taxonomy & events** (the biggest functional gap): the
+  engine currently drops everything that is not `contents.message.text`. A
+  messenger SDK must surface message *kind* from `metadata`
+  (`messageType`/`subType`/`action`) — files/images/emoticons, **system
+  events (member join/leave** → welcome-bot, the canonical pattern),
+  reply/quote, and edit/delete (`messageStatus`). `NewMessage` grows a
+  `kind` + typed payload; handlers can opt in. Receiving/downloading inbound
+  attachments (`tempFileDownloadLink`) builds on this.
+- **Outbound interactions**: emoticon/reaction (`/api/chat/message/emoticon`)
+  and reply-to-a-message (`action:"REPLY"`) — basic messenger verbs we can
+  send but currently can't.
+- **Room members & presence**: a `get_members()` model and
+  presence/connection status (`/api/chat/user/status/connection`, seen in
+  the capture) — needed for welcome/roster bots. Verification needed.
 - **Org directory lookup**: resolve users by name/department (GraphQL /
   organization tree) so `create_room`/mentions don't require raw numeric ids.
 - **Outbound mentions**: helper to build the `{{uuid::USER::@name::id}}`
