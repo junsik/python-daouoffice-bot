@@ -9,6 +9,13 @@ build/
 .eggs/
 *.egg
 
+# Tool caches / coverage
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+
 # Virtual Env
 .venv/
 venv/
