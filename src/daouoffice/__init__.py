@@ -23,6 +23,7 @@ from daouoffice.engine import BotEngine
 from daouoffice.profile import Profile, load_profile, save_profile
 from daouoffice.router import RoomRouter
 from daouoffice.sdk_bot import DaouBot
+from daouoffice.state import CursorStore, FileCursorStore, MemoryCursorStore
 
 __all__ = (
     "BotClient",
@@ -30,9 +31,12 @@ __all__ = (
     "BotIdentity",
     "ChatHistoryItem",
     "ChatRoomItem",
+    "CursorStore",
     "DaouAuthError",
     "DaouBot",
     "DaouConfigError",
+    "FileCursorStore",
+    "MemoryCursorStore",
     "NewMessage",
     "Profile",
     "RoomOpenData",

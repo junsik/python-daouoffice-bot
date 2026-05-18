@@ -100,6 +100,13 @@ asyncio.run(main())
 > `RoomRouter` 를 쓰세요 — 등록한 방만 처리하고 나머지는 무시합니다(allowlist).
 > `bot = DaouBot(..., prompt_func=router)`. 예제: `examples/bot-router`.
 
+**재시작 복구:** "어디까지 처리했는지"(방별 마지막 메시지 id)는 기본적으로
+`.daoubot/cursors.json` 에 저장됩니다 — 봇이 재시작해도 백로그를 다시 처리하거나
+다운타임 메시지를 건너뛰지 않고 이어받습니다. 비영속을 원하면
+`DaouBot(..., cursor_store=MemoryCursorStore())`. 단, 폴링 특성상 따라잡기는
+방당 최근 ~20개 히스토리 창 안으로 제한됩니다(그보다 오래 다운되면 창 밖
+메시지는 복구 불가 — "since id" 엔드포인트가 없음).
+
 ## CLI
 
 ```bash
@@ -141,6 +148,7 @@ uv run --with python-daouoffice-bot examples/bot-echobot/bot.py
 | `BotEngine` | 폴링 엔진 (단일 구현, async) |
 | `DaouBot` | 고수준 봇 (`prompt_func` + 폴링 + 401 자동 재로그인) |
 | `RoomRouter` | 방별 핸들러 분기 (등록한 방만 처리, 나머지 무시) |
+| `FileCursorStore` / `MemoryCursorStore` | 처리 위치 영속/비영속 저장 |
 | `NewMessage` | 정규화된 수신 메시지 |
 | `BotIdentity` | 로그인 시 해석된 봇 자신의 신원 |
 | `Profile` | `daoubot login` 이 저장하는 프로필 (`load_profile`) |

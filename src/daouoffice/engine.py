@@ -19,6 +19,7 @@ import logging
 from collections.abc import Awaitable, Callable
 
 from daouoffice.client import BotClient, NewMessage
+from daouoffice.state import CursorStore, MemoryCursorStore
 
 logger = logging.getLogger(__name__)
 
@@ -35,6 +36,9 @@ class BotEngine:
         client: A logged-in :class:`BotClient`.
         on_message: Async callback invoked per inbound message.
         poll_interval: Seconds between poll cycles.
+        cursors: Where to persist the per-room processed cursor. Defaults to
+            an in-memory store (not durable across restarts); pass a
+            :class:`~daouoffice.state.FileCursorStore` to resume after restart.
     """
 
     def __init__(
@@ -43,13 +47,14 @@ class BotEngine:
         on_message: OnMessageCallback,
         *,
         poll_interval: int = POLL_INTERVAL,
+        cursors: CursorStore | None = None,
     ) -> None:
         self._client = client
         self._on_message = on_message
         self._poll_interval = poll_interval
         self._running = False
-        # room_id -> highest chatMessageId already handled (baseline)
-        self._seen: dict[str, int] = {}
+        # room_id -> highest chatMessageId already handled
+        self._cursors: CursorStore = cursors or MemoryCursorStore()
 
     async def start(self) -> None:
         """Run the poll loop until :meth:`stop` is called."""
@@ -92,14 +97,15 @@ class BotEngine:
         ids = [m for m in (self._mid(it) for it in history) if m is not None]
         latest = history[-1].chatMessageId
 
-        baseline = self._seen.get(room_id)
+        baseline = self._cursors.get(room_id)
         if baseline is None:
-            # First time we see this room: don't replay the backlog.
-            self._seen[room_id] = max(ids, default=0)
+            # First time we ever see this room: don't replay the backlog.
+            start_at = max(ids, default=0)
+            self._cursors.set(room_id, start_at)
             logger.info(
                 "Room %s: baseline at %s (%d backlog message(s) skipped)",
                 room_id,
-                self._seen[room_id],
+                start_at,
                 len(history),
             )
             await self._mark_read(latest)
@@ -109,7 +115,7 @@ class BotEngine:
         for item in history:
             mid = self._mid(item)
             if mid is not None and mid <= baseline:
-                continue  # already handled in a previous cycle
+                continue  # already handled in a previous cycle / before restart
             if mid is not None:
                 handled = max(handled, mid)
             msg = self._to_message(item, room_type)
@@ -119,7 +125,8 @@ class BotEngine:
                 continue  # skip our own messages
             await self._dispatch(msg)
 
-        self._seen[room_id] = handled
+        if handled != baseline:
+            self._cursors.set(room_id, handled)
         await self._mark_read(latest)
 
     async def _mark_read(self, message_id) -> None:

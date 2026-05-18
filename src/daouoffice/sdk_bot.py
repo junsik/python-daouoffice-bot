@@ -35,6 +35,7 @@ from collections.abc import Awaitable, Callable
 
 from daouoffice.client import BotClient, NewMessage
 from daouoffice.engine import POLL_INTERVAL, BotEngine
+from daouoffice.state import CursorStore, FileCursorStore
 
 logger = logging.getLogger(__name__)
 
@@ -53,6 +54,10 @@ class DaouBot:
             Return a string to reply, ``None`` for no reply. If omitted, the
             bot only reads/marks messages and never replies.
         poll_interval: Seconds between poll cycles.
+        cursor_store: Where the processed-message cursor is persisted.
+            Defaults to a :class:`~daouoffice.state.FileCursorStore`
+            (``.daoubot/cursors.json``) so a restart resumes where it left
+            off. Pass :class:`~daouoffice.state.MemoryCursorStore` to opt out.
     """
 
     def __init__(
@@ -64,10 +69,16 @@ class DaouBot:
         company_id: str | None = None,
         prompt_func: PromptFunc | None = None,
         poll_interval: int = POLL_INTERVAL,
+        cursor_store: CursorStore | None = None,
     ) -> None:
         self._client = BotClient(login_id, password, base_url=base_url, company_id=company_id)
         self._prompt_func = prompt_func
-        self._engine = BotEngine(self._client, self._on_message, poll_interval=poll_interval)
+        self._engine = BotEngine(
+            self._client,
+            self._on_message,
+            poll_interval=poll_interval,
+            cursors=cursor_store or FileCursorStore(),
+        )
 
     @property
     def client(self) -> BotClient:

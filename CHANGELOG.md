@@ -19,6 +19,10 @@ REST API; no official bot API exists.
   recover by re-authenticating.
 - `BotEngine` — async polling engine with per-room last-seen tracking; the
   startup backlog is not replayed and messages are not handled twice.
+- Persistent cursors (`FileCursorStore`, default for `DaouBot`):
+  `.daoubot/cursors.json` records how far each room was processed so a restart
+  resumes instead of replaying or skipping. `MemoryCursorStore` opts out.
+  Catch-up is bounded by the ~20-message REST history window.
 - `DaouBot` — high-level bot driven solely by a `prompt_func` callback.
 - `RoomRouter` — allowlist-by-default per-room dispatch
   (`room_id` > `room_type` > default > ignore).
