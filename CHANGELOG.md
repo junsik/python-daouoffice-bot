@@ -44,11 +44,12 @@ REST API; no official bot API exists.
   flat retry every interval.
 - New `examples/bot-command` (the common `!cmd args` dispatcher pattern).
 - Claude Code skill `.claude/skills/daouoffice-bot/` (SKILL.md +
-  reference.md + scaffold.py): lets an AI agent scaffold/extend a bot from
-  this SDK. Ported from the claude-office-skills `telegram-bot` skill but
-  rewritten for DaouOffice reality (no BotFather/webhooks/inline; polling,
-  allowlist, idempotency, env/profile config). `scaffold.py` emits runnable
-  echo/command/assistant/router bots (UTF-8 safe on Korean Windows).
+  reference.md + scaffold.py): a **design guide**, not a template menu —
+  the agent elicits requirements, maps them to primitives via a decision
+  matrix, and assembles the bot under the SDK's invariants (no BotFather/
+  webhooks/inline; polling, allowlist, idempotency, env/profile config).
+  `scaffold.py` emits only correct boilerplate (UTF-8 safe on cp949
+  Windows); the design is the agent's, from the user's actual needs.
 - Architecture documented in `docs/ARCHITECTURE.md` (with diagrams).
 - `DaouBot` — high-level bot driven solely by a `prompt_func` callback.
 - `RoomRouter` — allowlist-by-default per-room dispatch
