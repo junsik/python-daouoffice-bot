@@ -52,5 +52,6 @@ REST API; no official bot API exists.
 - Unofficial; depends on a private API and may break on server changes.
 - The LLM integration is intentionally **not** part of the SDK — see
   `examples/bot-assistant`.
-- Real-time WebSocket/STOMP (`ws_handler.py`) is experimental; polling is the
-  supported path.
+- Polling is the only delivery path. A WebSocket/STOMP endpoint was seen in
+  the capture but never validated, so no WS code is shipped — kept as
+  reverse-engineering notes (`docs/04-websocket.md`) for future work.

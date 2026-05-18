@@ -182,7 +182,9 @@ uv run --with python-daouoffice-bot examples/bot-echobot/bot.py
 | `Profile` | `daoubot login` 이 저장하는 프로필 (`load_profile`) |
 | `DaouAuthError` / `DaouConfigError` | 예외 |
 
-실시간 WebSocket/STOMP(`ws_handler.py`)는 실험적이며 폴링이 정식 경로입니다.
+전달은 **폴링만** 사용합니다. WebSocket(`GET /ws/pc`, STOMP)은 캡처에서
+엔드포인트만 관측됐을 뿐 흐름을 검증하지 못해 **구현하지 않았습니다**
+(미검증 RE 메모: [docs/04-websocket.md](docs/04-websocket.md)).
 
 ## 프로젝트 구조
 

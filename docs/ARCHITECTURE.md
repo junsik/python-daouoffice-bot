@@ -26,8 +26,9 @@ flowchart LR
   (see `examples/bot-assistant`), never in the SDK.
 - **Not** tied to one tenant. Every tenant value (`base_url`, `company_id`,
   identity) is supplied or auto-resolved, never hard-coded.
-- Real-time WebSocket/STOMP (`ws_handler.py`) is experimental; **polling is the
-  supported path**.
+- **Polling only.** A WebSocket/STOMP endpoint was seen in the capture but
+  never validated, so it is **not implemented** (no speculative code shipped);
+  kept as reverse-engineering notes for possible future work.
 
 ## 2. Components
 
@@ -176,7 +177,7 @@ flowchart LR
 | RoomRouter = allowlist by default | A bot account can be dragged into any room; replying everywhere is a footgun. |
 | Mentions: SDK parses, gating is declarative (no knob) | Token parsing is platform knowledge the SDK must own; "all vs mention-only" has no single right answer, so it is a composable filter (`only_when_mentioned`), not a global mode — same principle as the dropped delivery knob. |
 | LLM excluded from SDK | Single responsibility (messaging). LLM is a handler concern; shown by example. |
-| Polling over WebSocket | REST is fully reverse-engineered and stable; STOMP path is unproven. |
+| Polling only; no WebSocket code | REST is fully reverse-engineered and stable; the STOMP flow was never validated, so shipping speculative WS code would mislead. Documented as notes only. |
 
 ## 8. Known limitations
 

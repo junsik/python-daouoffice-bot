@@ -9,7 +9,7 @@ SAZ 분석 결과 기반 전체 API 엔드포인트 목록입니다.
 | 포털(인증) | 로그인, 조직도, GraphQL | [01-auth.md](./01-auth.md), [05-other-api.md](./05-other-api.md) |
 | 채팅방 | 생성, 목록, 상세, 구성원 | [02-chat-room.md](./02-chat-room.md) |
 | 메시지 | 전송, 히스토리, 읽음, 검색 | [03-messages.md](./03-messages.md) |
-| 실시간 | WebSocket/STOMP, 상태 | [04-websocket.md](./04-websocket.md) |
+| 실시간 (미구현) | WebSocket/STOMP — 미검증 RE 메모 | [04-websocket.md](./04-websocket.md) |
 
 ## 전체 엔드포인트 목록
 

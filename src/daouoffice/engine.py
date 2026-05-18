@@ -8,8 +8,9 @@ On first contact with a room the existing backlog is **not** replayed — a
 baseline is set so the bot only reacts to messages that arrive while it is
 running. The bot's own messages are skipped via the identity resolved at login.
 
-Real-time WebSocket/STOMP delivery is experimental and lives in
-``ws_handler.py``; the polling engine is the supported path.
+Polling is the only delivery mechanism. A WebSocket/STOMP endpoint
+(``GET /ws/pc``) was observed in the traffic capture but its flow was never
+validated, so it is intentionally not implemented (see docs/04-websocket.md).
 """
 
 from __future__ import annotations
