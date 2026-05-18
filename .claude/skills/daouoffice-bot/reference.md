@@ -8,7 +8,7 @@ Condensed, self-contained API + gotchas for building bots. (Repo docs:
 | Symbol | Purpose |
 |---|---|
 | `DaouBot` | High-level bot. `DaouBot.from_env(on_message=...)` resolves connection from env/profile. `run_forever()` = login + poll + graceful SIGINT/SIGTERM. |
-| `BotClient` | REST wrapper: `login()`, `whoami()`, `discover_company()`, `get_rooms()`, `create_room()`, `open_room()`, `send_message()`, `get_chat_history()`, `mark_read()`. `from_env()` / `from_token()`. |
+| `BotClient` | REST wrapper: `login()`, `whoami()`, `discover_company()`, `get_rooms()`, `create_room()`, `open_room()`, `send_message(room, content="", *, attachments=[...])`, `upload_attachment(path)`, `send_file(room, path, content="")`, `get_chat_history()`, `mark_read()`. `from_env()` / `from_token()`. |
 | `BotEngine` | Polling engine (used internally by `DaouBot`). |
 | `NewMessage` | Inbound message (see fields below). |
 | `RoomRouter` | Per-room handler dispatch; **allowlist** — unregistered rooms ignored. `add_room(id, fn)`, `add_room_type("SINGLE"/"GROUP", fn)`, `set_default(fn)`, decorators `@router.room(id)` / `@router.room_type(t)` / `@router.default`. Pass the router as `on_message`. |
@@ -56,6 +56,10 @@ string to reply, `None` for no reply. Sync or async.
    but unimplemented). Do not fabricate these.
 8. **Don't run two bot processes on one account** — duplicate handling +
    `mark_read` races. Scale with `RoomRouter` in one process.
+9. **Files are attachments, not inline.** MD/HTML is not rendered in chat;
+   `send_file(room, path)` uploads it as a downloadable attachment. Good for
+   an LLM-generated newsletter: write `news.md`/`.html`, then `send_file`.
+   Attachment contracts are SAZ-derived and **live-unverified**.
 
 ## Minimal working bot
 

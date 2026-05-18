@@ -58,8 +58,9 @@ before being called supported.
   `mentionTypeList`) — could power an efficient "mentions-only" mode.
 - **Room admin ops**: leave / lock / kick / history-open (documented in
   `docs/02-chat-room.md`), behind explicit methods.
-- **Attachments**: send/receive files (`/api/upload/attach/app`) and
-  emoticon reactions (`/api/chat/message/emoticon`). Currently text-only.
+- **Attachments**: *send* is done in 0.1 (`upload_attachment`/`send_file`,
+  SAZ-derived, live-unverified). Remaining: receiving/downloading inbound
+  attachments, and emoticon reactions (`/api/chat/message/emoticon`).
 
 ## 0.4.x — Ergonomics (gated on real demand, not speculation)
 

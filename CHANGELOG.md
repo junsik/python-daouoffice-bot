@@ -55,6 +55,11 @@ REST API; no official bot API exists.
   webhooks/inline; polling, allowlist, idempotency, env/profile config).
   `scaffold.py` emits only correct boilerplate (UTF-8 safe on cp949
   Windows); the design is the agent's, from the user's actual needs.
+- Attachment sending: `BotClient.upload_attachment(path)` +
+  `send_message(..., attachments=[...])`, shortcut `send_file()` /
+  `DaouBot.send_file()` (e.g. post an LLM-generated newsletter .md/.html as
+  a downloadable file). Two-step flow decoded from the SAZ and documented in
+  `docs/03-messages.md` §3.7; contracts are **live-unverified**.
 - Architecture documented in `docs/ARCHITECTURE.md` (with diagrams).
 - `DaouBot` — high-level bot driven solely by an `on_message` callback.
 - `RoomRouter` — allowlist-by-default per-room dispatch

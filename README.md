@@ -119,6 +119,12 @@ asyncio.run(main())
 bot = DaouBot(..., on_message=only_when_mentioned(handle))
 ```
 
+**파일 첨부 (예: LLM 뉴스레터):** 채팅은 MD/HTML 을 인라인 렌더하지
+않습니다. `bot.send_file(room_id, "news.md", "이번 주 뉴스레터")` 로 업로드
+→ 첨부로 전송(수신자 다운로드). `BotClient.upload_attachment()` +
+`send_message(..., attachments=[...])` 분해도 가능. 첨부 계약은 SAZ 기반이며
+**라이브 미검증**입니다([docs/03-messages.md](docs/03-messages.md) §3.7).
+
 **재시작 복구:** "어디까지 처리했는지"(방별 마지막 메시지 id)는 기본적으로
 `.daoubot/cursors.json` 에 저장됩니다 — 봇이 재시작해도 백로그를 다시 처리하거나
 다운타임 메시지를 건너뛰지 않고 이어받습니다. 비영속을 원하면
@@ -194,7 +200,7 @@ uv run --with python-daouoffice-bot examples/bot-echobot/bot.py
 
 | 심볼 | 설명 |
 |---|---|
-| `BotClient` | REST API 래퍼 (로그인·방·메시지·`whoami`·`discover_company`) |
+| `BotClient` | REST API 래퍼 (로그인·방·메시지·첨부·`whoami`·`discover_company`) |
 | `BotEngine` | 폴링 엔진 (단일 구현, async) |
 | `DaouBot` | 고수준 봇 (`on_message` + 폴링 + 401 자동 재로그인) |
 | `RoomRouter` | 방별 핸들러 분기 (등록한 방만 처리, 나머지 무시) |

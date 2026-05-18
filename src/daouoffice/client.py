@@ -20,6 +20,8 @@ import os
 import re
 import uuid
 from dataclasses import dataclass, field
+from datetime import UTC, datetime
+from pathlib import Path
 
 import httpx
 from pydantic import BaseModel, ConfigDict
@@ -427,20 +429,72 @@ class BotClient:
 
     # -- Messages -------------------------------------------------------
 
-    def send_message(self, room_id: str, content: str) -> str:
-        """Send a text message and return the client message id (``cmid``)."""
+    def send_message(
+        self,
+        room_id: str,
+        content: str = "",
+        *,
+        attachments: list[dict] | None = None,
+    ) -> str:
+        """Send a message (optionally with uploaded attachments).
+
+        ``attachments`` is a list of dicts returned by
+        :meth:`upload_attachment`. Returns the client message id (``cmid``).
+        """
         cmid = str(uuid.uuid4())
+        body: dict = {"message": content}
+        if attachments:
+            body["attachmentList"] = [self._attachment_entry(a) for a in attachments]
         resp = self._api(
             "POST",
             "/api/chat/message",
-            json={
-                "chatRoomId": room_id,
-                "cmid": cmid,
-                "content": {"message": content},
-            },
+            json={"chatRoomId": room_id, "cmid": cmid, "content": body},
         )
         resp.raise_for_status()
         return resp.json()["data"]["cmid"]
+
+    def upload_attachment(self, path: str | os.PathLike[str]) -> dict:
+        """Upload a file for chat and return its attachment metadata.
+
+        The returned dict (server ``data``: ``filePath``/``fileName``/
+        ``fileSize``/...) is passed to :meth:`send_message` via
+        ``attachments=[...]`` or used by :meth:`send_file`.
+        """
+        p = Path(path)
+        data = p.read_bytes()
+        resp = self._api(
+            "POST",
+            "/api/upload/attach/app",
+            params={"app-code": "dop-default-chat", "thumb-category": "attach"},
+            files={"file": (p.name, data, "application/octet-stream")},
+        )
+        resp.raise_for_status()
+        return resp.json()["data"]
+
+    def send_file(self, room_id: str, path: str | os.PathLike[str], content: str = "") -> str:
+        """Upload ``path`` and post it to ``room_id`` as an attachment."""
+        meta = self.upload_attachment(path)
+        return self.send_message(room_id, content, attachments=[meta])
+
+    def _attachment_entry(self, meta: dict) -> dict:
+        """Build a chat ``attachmentList`` entry from upload metadata."""
+        ident = self.identity
+        sender = {
+            "companyUuid": ident.company_uuid if ident else "",
+            "platformUserId": ident.user_id if ident else "",
+            "platformUserName": ident.name if ident else "",
+            "profilePath": "",
+        }
+        return {
+            "attachmentId": -1,
+            "filePath": meta["filePath"],
+            "fileType": "",
+            "fileName": meta["fileName"],
+            "fileSize": meta.get("fileSize", 0),
+            "fileStatus": "UPLOADED",
+            "sender": sender,
+            "createdAt": datetime.now(UTC).isoformat(timespec="milliseconds"),
+        }
 
     def get_chat_history(
         self, room_id: str, *, offset: int = 20, message_id: int = 0

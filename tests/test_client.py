@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import json
+
 import httpx
 import pytest
 import respx
@@ -130,3 +132,40 @@ def test_get_rooms_and_send() -> None:
     rooms = client.get_rooms()
     assert rooms[0].roomId == "r1"
     assert client.send_message("r1", "hi") == "c1"
+
+
+@respx.mock
+def test_send_file_uploads_then_attaches(tmp_path) -> None:
+    _login_routes(respx.mock)
+    upload = respx.post("/api/upload/attach/app").mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "data": {
+                    "filePath": "U/20260518/abc",
+                    "fileName": "news.md",
+                    "fileSize": 12,
+                    "fileExtension": "md",
+                }
+            },
+        )
+    )
+    msg = respx.post("/api/chat/message").mock(
+        return_value=httpx.Response(200, json={"data": {"cmid": "c9"}})
+    )
+    f = tmp_path / "news.md"
+    f.write_text("# hi", encoding="utf-8")
+
+    client = BotClient("acme-bot", "p", base_url=BASE, company_id="11000")
+    client.login()
+    assert client.send_file("r1", f, "뉴스레터") == "c9"
+
+    assert upload.called and msg.called
+    body = json.loads(msg.calls.last.request.content)
+    att = body["content"]["attachmentList"][0]
+    assert att["filePath"] == "U/20260518/abc"
+    assert att["fileName"] == "news.md"
+    assert att["fileStatus"] == "UPLOADED"
+    # sender is the resolved bot identity, not hard-coded
+    assert att["sender"]["platformUserId"] == "42"
+    assert att["sender"]["companyUuid"] == "ACME-UUID"

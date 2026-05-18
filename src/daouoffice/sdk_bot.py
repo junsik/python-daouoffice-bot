@@ -179,6 +179,10 @@ class DaouBot:
     async def send_message(self, room_id: str, content: str) -> str:
         return await asyncio.to_thread(self._client.send_message, room_id, content)
 
+    async def send_file(self, room_id: str, path: str, content: str = "") -> str:
+        """Upload a file (e.g. a generated newsletter .md/.html) to a room."""
+        return await asyncio.to_thread(self._client.send_file, room_id, path, content)
+
     # -- internal -------------------------------------------------------
 
     async def _invoke_handler(self, msg: NewMessage) -> str | None:
