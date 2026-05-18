@@ -167,6 +167,22 @@ daoubot start                          # 폴링 봇 실행
 uv run --with python-daouoffice-bot examples/bot-echobot/bot.py
 ```
 
+## AI로 봇 만들기 (Claude Code 스킬)
+
+저장소에 Claude Code **스킬**이 포함돼 있어, 클론한 폴더를 Claude Code로 열면
+바로 AI에게 "다우오피스 봇 만들어줘"라고 시켜 스캐폴딩·확장할 수 있습니다.
+
+```
+.claude/skills/daouoffice-bot/   # SKILL.md + reference.md + scaffold.py
+```
+
+- 자동 인식(저장소를 Claude Code로 열면) 또는 `~/.claude/skills/` 로 복사해
+  전역 사용.
+- 스킬이 BotFather 없는 온보딩(`daoubot discover`/`login`), 핸들러 패턴,
+  계정 전역 read·allowlist·멱등성 같은 함정을 AI에게 가르칩니다.
+- 즉시 스캐폴드: `python .claude/skills/daouoffice-bot/scaffold.py command > bot.py`
+  (`echo`/`command`/`assistant`/`router`).
+
 ## SDK 개요
 
 | 심볼 | 설명 |

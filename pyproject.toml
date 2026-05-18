@@ -56,7 +56,7 @@ packages = ["src/daouoffice"]
 
 [tool.ruff]
 line-length = 99
-extend-exclude = ["tools"]  # vendored reverse-engineering script
+extend-exclude = ["tools", ".claude"]  # RE script + Claude skill assets
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "PL", "UP", "RUF"]
