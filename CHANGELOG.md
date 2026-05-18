@@ -37,6 +37,12 @@ REST API; no official bot API exists.
 - `load_settings()` + `DaouBot.from_env()` / `BotClient.from_env()`: single
   resolver (arg > `DAOU_*` env > profile; password never from profile). All
   examples now use it — zero hard-coded connection values.
+- Graceful shutdown: `run_forever()` installs SIGINT/SIGTERM handlers and
+  logs out cleanly (matters under systemd, which stops with SIGTERM);
+  falls back to plain cancellation where signals are unavailable.
+- Exponential backoff on sustained poll failure (cap 5 min) instead of a
+  flat retry every interval.
+- New `examples/bot-command` (the common `!cmd args` dispatcher pattern).
 - Architecture documented in `docs/ARCHITECTURE.md` (with diagrams).
 - `DaouBot` — high-level bot driven solely by a `prompt_func` callback.
 - `RoomRouter` — allowlist-by-default per-room dispatch

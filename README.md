@@ -157,6 +157,7 @@ daoubot start                          # 폴링 봇 실행
 | 예제 | 설명 |
 |---|---|
 | `bot-echobot` | 받은 메시지를 그대로 반복 |
+| `bot-command` | `!cmd args` 명령 디스패처 (help/echo/whoami) |
 | `bot-conversation` | 방별 상태 머신 대화 |
 | `bot-assistant` | 핸들러에서 OpenAI 호환 LLM 호출 (LLM_* env 필요) |
 | `bot-router` | 방별 핸들러 분기 (등록한 방만 처리하는 allowlist) |

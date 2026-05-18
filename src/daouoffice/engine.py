@@ -74,12 +74,20 @@ class BotEngine:
         """Run the poll loop until :meth:`stop` is called."""
         logger.info("Starting bot engine (REST polling, interval=%ss)", self._poll_interval)
         self._running = True
+        failures = 0
         while self._running:
             try:
                 await self._poll_once()
+                failures = 0
             except Exception:
-                logger.exception("Poll cycle failed")
-            await asyncio.sleep(self._poll_interval)
+                failures += 1
+                logger.exception("Poll cycle failed (consecutive=%d)", failures)
+            # Exponential backoff on sustained failure (cap 5 min) so a
+            # misconfigured/clearly-down server is not hammered every interval.
+            delay = self._poll_interval
+            if failures:
+                delay = min(self._poll_interval * (2 ** min(failures, 6)), 300)
+            await asyncio.sleep(delay)
 
     def stop(self) -> None:
         self._running = False

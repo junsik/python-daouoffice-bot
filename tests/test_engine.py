@@ -45,6 +45,31 @@ async def _echo(m):
 
 
 @pytest.mark.asyncio
+async def test_poll_failure_backs_off(monkeypatch) -> None:
+    class Boom:
+        user_id = "BOT"
+
+        def get_rooms(self):
+            raise RuntimeError("server down")
+
+    engine = BotEngine(Boom(), _echo, poll_interval=5)
+    delays: list[float] = []
+
+    async def fake_sleep(d):
+        delays.append(d)
+        if len(delays) >= 3:  # let it fail a few times then stop
+            engine.stop()
+
+    monkeypatch.setattr("daouoffice.engine.asyncio.sleep", fake_sleep)
+    await engine.start()
+
+    # Backoff grows on consecutive failures (not a flat poll_interval).
+    assert delays[0] >= 5
+    assert delays[1] > delays[0]
+    assert delays[2] > delays[1]
+
+
+@pytest.mark.asyncio
 async def test_first_poll_sets_baseline_without_replay() -> None:
     client = FakeClient([_msg("USER", "old1", 1), _msg("USER", "old2", 2)])
     engine = BotEngine(client, _echo)

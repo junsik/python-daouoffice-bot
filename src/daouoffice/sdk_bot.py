@@ -30,7 +30,9 @@ The SDK does one thing: talk to DaouOffice messenger. It deliberately does
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import logging
+import signal
 from collections.abc import Awaitable, Callable
 
 from daouoffice.client import BotClient, NewMessage
@@ -133,12 +135,39 @@ class DaouBot:
         await asyncio.to_thread(self._client.logout)
 
     async def run_forever(self) -> None:
-        """Start the bot and run until cancelled (Ctrl-C)."""
+        """Run until SIGINT/SIGTERM (Ctrl-C, ``systemctl stop``) or error.
+
+        Installs signal handlers for a graceful shutdown (logout) — important
+        under systemd, which stops services with SIGTERM. Falls back to plain
+        cancellation where signal handlers are unavailable (e.g. Windows).
+        """
+        loop = asyncio.get_running_loop()
+        stop = asyncio.Event()
+        installed: list[signal.Signals] = []
+        for sig in (signal.SIGINT, signal.SIGTERM):
+            try:
+                loop.add_signal_handler(sig, stop.set)
+                installed.append(sig)
+            except (NotImplementedError, AttributeError, ValueError):
+                pass  # not supported on this platform/loop
+
+        runner = asyncio.ensure_future(self.start())
+        waiter = asyncio.ensure_future(stop.wait())
         try:
-            await self.start()
+            await asyncio.wait({runner, waiter}, return_when=asyncio.FIRST_COMPLETED)
+            if runner.done():
+                runner.result()  # surface start()/login errors to the caller
         except (KeyboardInterrupt, asyncio.CancelledError):
             pass
         finally:
+            self._engine.stop()
+            for fut in (runner, waiter):
+                if not fut.done():
+                    fut.cancel()
+                    with contextlib.suppress(asyncio.CancelledError):
+                        await fut
+            for sig in installed:
+                loop.remove_signal_handler(sig)
             await self.stop()
 
     async def send_message(self, room_id: str, content: str) -> str:
