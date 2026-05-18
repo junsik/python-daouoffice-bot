@@ -232,6 +232,21 @@ class BotClient:
         client = cls("", "", base_url=base_url, access_token=access_token, timeout=timeout)
         return client
 
+    @classmethod
+    def from_env(cls, *, timeout: float = 30.0, **overrides: str) -> BotClient:
+        """Build a client from env / profile (see ``daouoffice.load_settings``)."""
+        # Lazy: config imports client, so a top-level import would be a cycle.
+        from daouoffice.config import load_settings  # noqa: PLC0415
+
+        s = load_settings(**overrides)
+        return cls(
+            s.login_id,
+            s.password,
+            base_url=s.base_url,
+            company_id=s.company_id,
+            timeout=timeout,
+        )
+
     @property
     def user_id(self) -> str:
         """The bot account's own platform user id (set after :meth:`login`)."""

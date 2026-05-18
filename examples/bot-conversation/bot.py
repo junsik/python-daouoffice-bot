@@ -1,18 +1,16 @@
 #!/usr/bin/env python
-"""Conversation bot — keeps a tiny per-room state machine.
+"""Conversation bot — a tiny per-room state machine.
 
 Drive it by sending: "시작" → "네" → "네".
+Connection settings come from env / profile (see README).
 
-Configure via DAOU_* environment variables (see README), then::
-
-    uv run --with python-daouoffice-bot bot.py
+    uv run --with python-daouoffice-bot examples/bot-conversation/bot.py
 """
 
 from __future__ import annotations
 
 import asyncio
 import logging
-import os
 from collections import defaultdict
 
 from daouoffice import DaouBot, NewMessage
@@ -23,7 +21,7 @@ logging.basicConfig(
 )
 logging.getLogger("httpx").setLevel(logging.WARNING)
 
-# (current_state, keyword) -> (next_state, reply)
+# (state, keyword) -> (next_state, reply)
 TRANSITIONS: dict[tuple[str | None, str], tuple[str, str]] = {
     (None, "시작"): ("greeting", "안녕하세요! 계속하려면 '네' 라고 보내주세요."),
     ("greeting", "네"): ("ask_name", "이름을 입력해 주세요."),
@@ -45,12 +43,7 @@ async def handle(msg: NewMessage) -> str:
 
 
 async def main() -> None:
-    bot = DaouBot(
-        login_id=os.environ["DAOU_LOGIN_ID"],
-        password=os.environ["DAOU_PASSWORD"],
-        llm="none",
-        prompt_func=handle,
-    )
+    bot = DaouBot.from_env(prompt_func=handle)
     await bot.run_forever()
 
 

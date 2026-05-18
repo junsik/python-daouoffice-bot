@@ -19,6 +19,7 @@ from daouoffice.client import (
     NewMessage,
     RoomOpenData,
 )
+from daouoffice.config import Settings, load_settings
 from daouoffice.engine import BotEngine
 from daouoffice.profile import Profile, load_profile, save_profile
 from daouoffice.router import RoomRouter, only_when_mentioned
@@ -41,9 +42,11 @@ __all__ = (
     "Profile",
     "RoomOpenData",
     "RoomRouter",
+    "Settings",
     "__version__",
     "__version_info__",
     "load_profile",
+    "load_settings",
     "only_when_mentioned",
     "save_profile",
 )

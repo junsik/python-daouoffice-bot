@@ -34,6 +34,9 @@ REST API; no official bot API exists.
   `only_when_mentioned(handler)` filter gates noisy group rooms (no global
   knob — policy stays declarative). Encoding documented in
   `docs/03-messages.md` §3.6.
+- `load_settings()` + `DaouBot.from_env()` / `BotClient.from_env()`: single
+  resolver (arg > `DAOU_*` env > profile; password never from profile). All
+  examples now use it — zero hard-coded connection values.
 - Architecture documented in `docs/ARCHITECTURE.md` (with diagrams).
 - `DaouBot` — high-level bot driven solely by a `prompt_func` callback.
 - `RoomRouter` — allowlist-by-default per-room dispatch

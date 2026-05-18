@@ -1,21 +1,16 @@
 #!/usr/bin/env python
 """Echo bot — repeats every message back to its room.
 
-Configure via environment variables, then run::
+All connection settings come from env / .daoubot/profile.json (see README):
+DAOU_BASE_URL, DAOU_COMPANY_ID, DAOU_LOGIN_ID, DAOU_PASSWORD.
 
-    export DAOU_BASE_URL="https://yourcompany.daouoffice.com"
-    export DAOU_COMPANY_ID="11000000000"
-    export DAOU_LOGIN_ID="my-bot"
-    export DAOU_PASSWORD="..."
-
-    uv run --with python-daouoffice-bot bot.py
+    uv run --with python-daouoffice-bot examples/bot-echobot/bot.py
 """
 
 from __future__ import annotations
 
 import asyncio
 import logging
-import os
 
 from daouoffice import DaouBot, NewMessage
 
@@ -31,13 +26,7 @@ async def echo(msg: NewMessage) -> str:
 
 
 async def main() -> None:
-    bot = DaouBot(
-        login_id=os.environ["DAOU_LOGIN_ID"],
-        password=os.environ["DAOU_PASSWORD"],
-        # base_url / company_id come from DAOU_BASE_URL / DAOU_COMPANY_ID
-        llm="none",
-        prompt_func=echo,
-    )
+    bot = DaouBot.from_env(prompt_func=echo)
     await bot.run_forever()
 
 

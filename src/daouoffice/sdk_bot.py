@@ -34,6 +34,7 @@ import logging
 from collections.abc import Awaitable, Callable
 
 from daouoffice.client import BotClient, NewMessage
+from daouoffice.config import load_settings
 from daouoffice.engine import POLL_INTERVAL, BotEngine
 from daouoffice.state import CursorStore, FileCursorStore
 
@@ -82,6 +83,34 @@ class DaouBot:
             self._on_message,
             poll_interval=poll_interval,
             cursors=cursor_store or FileCursorStore(),
+            max_attempts=max_attempts,
+        )
+
+    @classmethod
+    def from_env(
+        cls,
+        *,
+        prompt_func: PromptFunc | None = None,
+        poll_interval: int = POLL_INTERVAL,
+        cursor_store: CursorStore | None = None,
+        max_attempts: int = 5,
+        **overrides: str,
+    ) -> DaouBot:
+        """Build a bot from env / profile (see :func:`daouoffice.load_settings`).
+
+        ``overrides`` may pass any of ``base_url``/``company_id``/``login_id``/
+        ``password`` explicitly; everything else comes from ``DAOU_*`` env vars
+        or ``.daoubot/profile.json``. Lets examples/apps avoid env plumbing.
+        """
+        s = load_settings(**overrides)
+        return cls(
+            s.login_id,
+            s.password,
+            base_url=s.base_url,
+            company_id=s.company_id,
+            prompt_func=prompt_func,
+            poll_interval=poll_interval,
+            cursor_store=cursor_store,
             max_attempts=max_attempts,
         )
 

@@ -1,14 +1,11 @@
 #!/usr/bin/env python
 """Error-handling bot — guards the handler and reports failures.
 
-Any exception raised while handling a message is caught, the user gets a
-friendly message, and (if DAOU_DEV_ROOM is set) the developer room receives
-the traceback.
+Connection settings: env / profile (see README).
+Optional app config:
+    DAOU_DEV_ROOM   room id to send tracebacks to (unset → only logged)
 
-Configure via DAOU_* env vars (see README), then::
-
-    export DAOU_DEV_ROOM="11000000000"   # optional: room id for alerts
-    uv run --with python-daouoffice-bot bot.py
+    uv run --with python-daouoffice-bot examples/bot-error-handler/bot.py
 """
 
 from __future__ import annotations
@@ -31,15 +28,12 @@ DEV_ROOM = os.getenv("DAOU_DEV_ROOM", "")
 
 
 async def risky_logic(msg: NewMessage) -> str:
-    # Demo: "!boom" raises so you can see the error path.
     if msg.message_text.strip() == "!boom":
         raise RuntimeError("intentional failure for demo")
     return f"echo: {msg.message_text}"
 
 
 def make_handler(bot: DaouBot):
-    """Build a guarded handler that reports failures to the dev room."""
-
     async def handle(msg: NewMessage) -> str:
         try:
             return await risky_logic(msg)
@@ -54,11 +48,7 @@ def make_handler(bot: DaouBot):
 
 
 async def main() -> None:
-    bot = DaouBot(
-        login_id=os.environ["DAOU_LOGIN_ID"],
-        password=os.environ["DAOU_PASSWORD"],
-        llm="none",
-    )
+    bot = DaouBot.from_env()
     bot.set_prompt_func(make_handler(bot))
     await bot.run_forever()
 

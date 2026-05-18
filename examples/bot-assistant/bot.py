@@ -1,15 +1,14 @@
 #!/usr/bin/env python
 """AI assistant bot — shows how to plug an LLM into a handler.
 
-The SDK intentionally does not bundle an LLM. This example calls any
-OpenAI-compatible chat API from inside ``prompt_func`` — swap it for Anthropic,
-Ollama, a local model, or your own logic as you like.
+The SDK does not bundle an LLM; this calls any OpenAI-compatible chat API
+from inside the handler. Swap it for Anthropic/Ollama/your own logic.
 
-Configure the DaouOffice connection via DAOU_* env vars (see README), plus::
-
-    export LLM_BASE_URL="https://your-gateway/v1"   # OpenAI-compatible
-    export LLM_API_KEY="sk-..."
-    export LLM_MODEL="gpt-4o-mini"                   # optional
+Connection settings: env / profile (see README).
+LLM settings (this example's own config):
+    LLM_BASE_URL  OpenAI-compatible base, e.g. https://gateway/v1
+    LLM_API_KEY   bearer key
+    LLM_MODEL     model name (optional, default gpt-4o-mini)
 
     uv run --with python-daouoffice-bot --with httpx examples/bot-assistant/bot.py
 """
@@ -37,7 +36,7 @@ LLM_MODEL = os.getenv("LLM_MODEL", "gpt-4o-mini")
 SYSTEM_PROMPT = "너는 다우오피스 메신저에 연결된 비서야. 간결하고 정확하게 답해."
 
 
-async def ask_llm(prompt: str) -> str | None:
+async def ask_llm(prompt: str) -> str:
     try:
         async with httpx.AsyncClient(timeout=30.0) as http:
             resp = await http.post(
@@ -58,16 +57,12 @@ async def ask_llm(prompt: str) -> str | None:
         return "죄송합니다. 지금은 응답을 생성할 수 없어요."
 
 
-async def handle(msg: NewMessage) -> str | None:
+async def handle(msg: NewMessage) -> str:
     return await ask_llm(msg.message_text)
 
 
 async def main() -> None:
-    bot = DaouBot(
-        login_id=os.environ["DAOU_LOGIN_ID"],
-        password=os.environ["DAOU_PASSWORD"],
-        prompt_func=handle,
-    )
+    bot = DaouBot.from_env(prompt_func=handle)
     await bot.run_forever()
 
 

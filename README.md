@@ -65,8 +65,14 @@ daoubot login --base-url https://yourcompany.daouoffice.com \
 # → .daoubot/profile.json 저장 + 회사/사용자 정보 출력 (토큰은 미출력)
 ```
 
-설정 우선순위: **CLI 플래그 > 환경 변수 > 프로필 파일**. 토큰이 만료되면
-자격증명이 있을 때 자동 재로그인하고, 없으면 `daoubot login` 을 다시 안내합니다.
+설정 우선순위: **명시 인자/CLI 플래그 > 환경 변수 > 프로필 파일**. 토큰이
+만료되면 자격증명이 있을 때 자동 재로그인하고, 없으면 `daoubot login` 을
+다시 안내합니다.
+
+코드에서도 같은 해석을 한 줄로 — `DaouBot.from_env(prompt_func=...)` 또는
+`BotClient.from_env()` 가 env/프로필을 읽어 객체를 만듭니다(`load_settings()`
+로 직접 조회도 가능, 비밀번호는 프로필에서 절대 안 읽음). 모든 예제가 이 방식이라
+연결정보 하드코딩이 없습니다.
 
 ## 빠른 시작
 
@@ -169,6 +175,7 @@ uv run --with python-daouoffice-bot examples/bot-echobot/bot.py
 | `DaouBot` | 고수준 봇 (`prompt_func` + 폴링 + 401 자동 재로그인) |
 | `RoomRouter` | 방별 핸들러 분기 (등록한 방만 처리, 나머지 무시) |
 | `only_when_mentioned` | 봇 멘션(`@봇`/`@전체`) 시에만 핸들러 실행 |
+| `load_settings` / `.from_env()` | env·프로필에서 연결설정 단일 조회 |
 | `FileCursorStore` / `MemoryCursorStore` | 처리 위치 영속/비영속 저장 |
 | `NewMessage` | 정규화된 수신 메시지 |
 | `BotIdentity` | 로그인 시 해석된 봇 자신의 신원 |
