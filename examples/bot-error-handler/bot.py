@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 """Error-handling bot — guards the handler and reports failures.
 
-Connection settings: env / profile (see README).
+Connection env vars: the same four shown in bot-echobot / README.
 Optional app config:
     DAOU_DEV_ROOM   room id to send tracebacks to (unset → only logged)
 
@@ -34,7 +34,7 @@ async def risky_logic(msg: NewMessage) -> str:
 
 
 def make_handler(bot: DaouBot):
-    async def handle(msg: NewMessage) -> str:
+    async def on_message(msg: NewMessage) -> str:
         try:
             return await risky_logic(msg)
         except Exception:
@@ -44,12 +44,17 @@ def make_handler(bot: DaouBot):
                 await bot.send_message(DEV_ROOM, f"⚠️ Bot error:\n```\n{tb}\n```")
             return "처리 중 오류가 발생했습니다. 잠시 후 다시 시도해 주세요."
 
-    return handle
+    return on_message
 
 
 async def main() -> None:
-    bot = DaouBot.from_env()
-    bot.set_prompt_func(make_handler(bot))
+    bot = DaouBot(
+        base_url=os.environ["DAOU_BASE_URL"],
+        company_id=os.environ["DAOU_COMPANY_ID"],
+        login_id=os.environ["DAOU_LOGIN_ID"],
+        password=os.environ["DAOU_PASSWORD"],
+    )
+    bot.set_handler(make_handler(bot))
     await bot.run_forever()
 
 

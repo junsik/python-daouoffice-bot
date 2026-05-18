@@ -4,7 +4,7 @@
 
 공식 봇 API가 없는 다우오피스 메신저를, **PC 메신저가 쓰는 REST API를 역분석**하여
 파이썬에서 다룰 수 있게 합니다. 방 목록 조회·메시지 송수신·폴링 기반 응답을 지원하며,
-메시지 핸들러(`prompt_func`) 안에서 원하는 로직(LLM 포함)을 자유롭게 붙입니다 —
+메시지 핸들러(`on_message`) 안에서 원하는 로직(LLM 포함)을 자유롭게 붙입니다 —
 SDK 자체는 LLM을 번들하지 않습니다.
 
 [![CI](https://github.com/junsik/python-daouoffice-bot/actions/workflows/ci.yml/badge.svg)](https://github.com/junsik/python-daouoffice-bot/actions/workflows/ci.yml)
@@ -69,15 +69,18 @@ daoubot login --base-url https://yourcompany.daouoffice.com \
 만료되면 자격증명이 있을 때 자동 재로그인하고, 없으면 `daoubot login` 을
 다시 안내합니다.
 
-코드에서도 같은 해석을 한 줄로 — `DaouBot.from_env(prompt_func=...)` 또는
-`BotClient.from_env()` 가 env/프로필을 읽어 객체를 만듭니다(`load_settings()`
-로 직접 조회도 가능, 비밀번호는 프로필에서 절대 안 읽음). 모든 예제가 이 방식이라
-연결정보 하드코딩이 없습니다.
+예제·아래 코드는 네 개의 `DAOU_*` 를 **명시적으로 환경에서 읽어** 무엇이
+필요한지 코드에 드러냅니다(시크릿 하드코딩 없음, 마법 없음). 실배포/CLI 용
+단축이 필요하면 `DaouBot.from_env(...)` / `BotClient.from_env()` 가 env·프로필을
+읽어 한 줄로 생성합니다(`load_settings()` 직접 조회 가능, 비밀번호는 프로필에서
+절대 안 읽음).
 
 ## 빠른 시작
 
 ```python
 import asyncio
+import os
+
 from daouoffice import DaouBot, NewMessage
 
 async def on_message(msg: NewMessage) -> str | None:
@@ -87,24 +90,24 @@ async def on_message(msg: NewMessage) -> str | None:
 
 async def main():
     bot = DaouBot(
-        login_id="my-bot",
-        password="...",                          # 또는 env DAOU_PASSWORD
-        base_url="https://acme.daouoffice.com",  # 또는 env DAOU_BASE_URL
-        company_id="11000000000",                # 또는 env DAOU_COMPANY_ID
-        prompt_func=on_message,
+        base_url=os.environ["DAOU_BASE_URL"],
+        company_id=os.environ["DAOU_COMPANY_ID"],
+        login_id=os.environ["DAOU_LOGIN_ID"],
+        password=os.environ["DAOU_PASSWORD"],
+        on_message=on_message,
     )
-    await bot.run_forever()   # Ctrl-C로 종료
+    await bot.run_forever()   # Ctrl-C / SIGTERM 시 graceful 종료
 
 asyncio.run(main())
 ```
 
-`prompt_func` 가 문자열을 반환하면 답장, `None` 이면 무응답입니다. 핸들러를
+`on_message` 가 문자열을 반환하면 답장, `None` 이면 무응답입니다. 핸들러를
 주지 않으면 봇은 메시지를 읽기만 합니다(답장 안 함). 30분 만료 시 자격증명이
 있으면 자동 재로그인합니다.
 
 > 봇 계정은 누구나 아무 방에나 초대할 수 있습니다. 특정 방에서만 동작시키려면
 > `RoomRouter` 를 쓰세요 — 등록한 방만 처리하고 나머지는 무시합니다(allowlist).
-> `bot = DaouBot(..., prompt_func=router)`. 예제: `examples/bot-router`.
+> `bot = DaouBot(..., on_message=router)`. 예제: `examples/bot-router`.
 
 **멘션:** 다우오피스 멘션은 본문 인라인 토큰입니다(전체 공개, 비공개 아님 —
 [docs/03-messages.md](docs/03-messages.md) §3.6). SDK가 파싱해 `msg.mentions` /
@@ -113,7 +116,7 @@ asyncio.run(main())
 `only_when_mentioned(handler)` 로 감싸세요(글로벌 노브 아님 — 정책은 선언으로).
 
 ```python
-bot = DaouBot(..., prompt_func=only_when_mentioned(handle))
+bot = DaouBot(..., on_message=only_when_mentioned(handle))
 ```
 
 **재시작 복구:** "어디까지 처리했는지"(방별 마지막 메시지 id)는 기본적으로
@@ -180,7 +183,7 @@ uv run --with python-daouoffice-bot examples/bot-echobot/bot.py
   전역 사용.
 - 스킬은 템플릿 메뉴가 아니라 **설계 가이드**입니다 — AI가 요구사항을
   인터뷰하고(테넌트·대상 방·트리거·상태·부작용), 결정 매트릭스로 프리미티브
-  (`prompt_func`/`RoomRouter`/`only_when_mentioned`/상태/LLM)를 조합해
+  (`on_message`/`RoomRouter`/`only_when_mentioned`/상태/LLM)를 조합해
   사용자가 원하는 봇을 만들도록, SDK 불변규칙(계정 전역 read·allowlist·
   멱등성·없는 API 날조 금지)과 함께 가르칩니다.
 - `scaffold.py` 는 유스케이스를 추측하지 않고 **올바른 보일러플레이트만**
@@ -193,7 +196,7 @@ uv run --with python-daouoffice-bot examples/bot-echobot/bot.py
 |---|---|
 | `BotClient` | REST API 래퍼 (로그인·방·메시지·`whoami`·`discover_company`) |
 | `BotEngine` | 폴링 엔진 (단일 구현, async) |
-| `DaouBot` | 고수준 봇 (`prompt_func` + 폴링 + 401 자동 재로그인) |
+| `DaouBot` | 고수준 봇 (`on_message` + 폴링 + 401 자동 재로그인) |
 | `RoomRouter` | 방별 핸들러 분기 (등록한 방만 처리, 나머지 무시) |
 | `only_when_mentioned` | 봇 멘션(`@봇`/`@전체`) 시에만 핸들러 실행 |
 | `load_settings` / `.from_env()` | env·프로필에서 연결설정 단일 조회 |

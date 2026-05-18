@@ -13,7 +13,7 @@ no per-room install/OAuth step.
 
 ```mermaid
 flowchart LR
-    dev[Bot developer] -->|writes prompt_func| sdk[python-daouoffice-bot]
+    dev[Bot developer] -->|writes on_message| sdk[python-daouoffice-bot]
     admin[DaouOffice admin] -->|issues bot account| acct[(Bot account)]
     sdk -->|login as bot account| tenant["https://&lt;company&gt;.daouoffice.com<br/>(private REST API)"]
     acct -. member of .-> rooms[(Chat rooms)]
@@ -22,7 +22,7 @@ flowchart LR
 
 ### Non-goals
 
-- **Not** an LLM framework. LLM calls live in the developer's `prompt_func`
+- **Not** an LLM framework. LLM calls live in the developer's `on_message`
   (see `examples/bot-assistant`), never in the SDK.
 - **Not** tied to one tenant. Every tenant value (`base_url`, `company_id`,
   identity) is supplied or auto-resolved, never hard-coded.
@@ -43,7 +43,7 @@ flowchart TD
         DaouBot -->|owns| BotClient
         BotEngine -->|calls| BotClient
         BotEngine -->|reads/writes| CursorStore["CursorStore<br/>.daoubot/cursors.json"]
-        BotEngine -->|dispatch| PF["prompt_func / RoomRouter"]
+        BotEngine -->|dispatch| PF["on_message / RoomRouter"]
     end
 
     BotClient -->|HTTP + auto re-login| API[(DaouOffice REST)]
@@ -53,13 +53,13 @@ flowchart TD
 |---|---|
 | `BotClient` | Stateless-ish REST wrapper: login, GraphQL `me` identity, rooms, messages, read receipts. Multi-tenant. Auto re-login on 401. |
 | `BotEngine` | Poll loop, per-room ordered dispatch, cursor/ack, delivery guarantee. |
-| `DaouBot` | High-level facade: wires client + engine, exposes `prompt_func`. |
+| `DaouBot` | High-level facade: wires client + engine, exposes `on_message`. |
 | `RoomRouter` | Allowlist-by-default per-room handler dispatch. |
 | `CursorStore` | Where "how far processed" is persisted (`Memory` / `File`). |
 | `Profile` | CLI session/identity persistence so commands skip re-auth. |
 
 Layering principle: **transport/bookkeeping lives in the engine/client; the
-developer writes a pure `prompt_func`.** This mirrors Telegram/Discord/Matrix/
+developer writes a pure `on_message`.** This mirrors Telegram/Discord/Matrix/
 Kafka clients, where consumer offset is framework-owned, not application code.
 
 ## 3. Authentication & session lifecycle
@@ -143,7 +143,7 @@ flowchart LR
 ```
 
 - The SDK guarantees *transport* at-least-once; **business idempotency is the
-  handler's job** — make `prompt_func` idempotent if a duplicate reply matters.
+  handler's job** — make `on_message` idempotent if a duplicate reply matters.
 - A failing message is retried **in order** per room (a stuck message blocks
   newer ones) until it succeeds or hits `max_attempts` → poison, skipped.
 - Read receipts follow this: marks read only up to the last acked message, so a

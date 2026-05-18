@@ -2,7 +2,7 @@
 """Conversation bot — a tiny per-room state machine.
 
 Drive it by sending: "시작" → "네" → "네".
-Connection settings come from env / profile (see README).
+Connection env vars are the same four shown in bot-echobot / README.
 
     uv run --with python-daouoffice-bot examples/bot-conversation/bot.py
 """
@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 from collections import defaultdict
 
 from daouoffice import DaouBot, NewMessage
@@ -31,7 +32,7 @@ TRANSITIONS: dict[tuple[str | None, str], tuple[str, str]] = {
 _state: dict[str, str | None] = defaultdict(lambda: None)
 
 
-async def handle(msg: NewMessage) -> str:
+async def on_message(msg: NewMessage) -> str:
     current = _state[msg.room_id]
     nxt = TRANSITIONS.get((current, msg.message_text.strip()))
     if nxt is None:
@@ -43,7 +44,13 @@ async def handle(msg: NewMessage) -> str:
 
 
 async def main() -> None:
-    bot = DaouBot.from_env(prompt_func=handle)
+    bot = DaouBot(
+        base_url=os.environ["DAOU_BASE_URL"],
+        company_id=os.environ["DAOU_COMPANY_ID"],
+        login_id=os.environ["DAOU_LOGIN_ID"],
+        password=os.environ["DAOU_PASSWORD"],
+        on_message=on_message,
+    )
     await bot.run_forever()
 
 

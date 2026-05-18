@@ -16,15 +16,17 @@ import sys
 SKELETON = '''#!/usr/bin/env python
 """DaouOffice bot.
 
-Connection comes from env / .daoubot/profile.json (never hard-code it):
+The four connection settings are read from the environment explicitly so the
+required inputs are visible (no hard-coded secrets):
 DAOU_BASE_URL, DAOU_COMPANY_ID, DAOU_LOGIN_ID, DAOU_PASSWORD
-(or run `daoubot login` once first). Run:  python bot.py
+Run:  python bot.py
 """
 
 from __future__ import annotations
 
 import asyncio
 import logging
+import os
 
 from daouoffice import DaouBot, NewMessage
 
@@ -35,7 +37,7 @@ logging.basicConfig(
 logging.getLogger("httpx").setLevel(logging.WARNING)
 
 
-async def handle(msg: NewMessage) -> str | None:
+async def on_message(msg: NewMessage) -> str | None:
     # TODO: implement the behavior the user asked for.
     #   msg.room_id / room_type / sender_name / message_text
     #   msg.mentions_me / mention_all / mentions / raw_text
@@ -46,7 +48,13 @@ async def handle(msg: NewMessage) -> str | None:
 
 
 async def main() -> None:
-    bot = DaouBot.from_env(prompt_func=handle)
+    bot = DaouBot(
+        base_url=os.environ["DAOU_BASE_URL"],
+        company_id=os.environ["DAOU_COMPANY_ID"],
+        login_id=os.environ["DAOU_LOGIN_ID"],
+        password=os.environ["DAOU_PASSWORD"],
+        on_message=on_message,
+    )
     await bot.run_forever()
 
 

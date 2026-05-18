@@ -40,7 +40,7 @@ the stated goal and state the assumptions; don't invent scope.
 
 | Requirement | Use |
 |---|---|
-| One behavior, any/one room | bare `prompt_func(msg)->str|None` |
+| One behavior, any/one room | bare `on_message(msg)->str|None` |
 | Different behavior per room / DM vs group | `RoomRouter` (allowlist: unregistered rooms ignored) |
 | Quiet in busy groups, act only when addressed | wrap handler in `only_when_mentioned(...)` |
 | `!cmd args` commands | parse `msg.message_text` prefix yourself (no command framework exists) |
@@ -62,14 +62,16 @@ the handler, from Step 2.
 python .claude/skills/daouoffice-bot/scaffold.py > bot.py
 ```
 
-Then implement the handler for the user's requirement. Build the bot via
-`DaouBot.from_env(...)` so connection settings come from env/profile (never
-hard-coded). Read room ids from env/args too.
+Then implement the handler for the user's requirement. Construct `DaouBot`
+**explicitly** with the four `DAOU_*` settings read from the environment, so
+the generated bot is self-documenting (no hidden config). Read room ids from
+env/args too. (`DaouBot.from_env(...)` is an optional terse shortcut for
+production/CLI — fine, but examples favor the explicit form for readability.)
 
 ## Step 4 — Invariants you MUST keep (the SDK's hard rules)
 
 - **No hard-coded** base_url/company_id/credentials/room ids in any code you
-  write. `DaouBot.from_env()` + env vars. No real secrets in code or commits.
+  write — read them from env (visibly). No real secrets in code or commits.
 - **Idempotent handlers.** Delivery is at-least-once (not configurable);
   restart/crash can re-deliver. Guard non-idempotent side effects.
 - **Don't spam.** Any bot reachable from group rooms uses `RoomRouter` and/or

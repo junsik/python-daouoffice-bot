@@ -35,8 +35,13 @@ REST API; no official bot API exists.
   knob — policy stays declarative). Encoding documented in
   `docs/03-messages.md` §3.6.
 - `load_settings()` + `DaouBot.from_env()` / `BotClient.from_env()`: single
-  resolver (arg > `DAOU_*` env > profile; password never from profile). All
-  examples now use it — zero hard-coded connection values.
+  resolver (arg > `DAOU_*` env > profile; password never from profile) — a
+  terse shortcut for production/CLI. Examples instead construct `DaouBot`
+  explicitly reading the four `DAOU_*` vars, so required inputs stay visible
+  (no hard-coded secrets, no hidden config).
+- The message-handler argument is `on_message` (was `prompt_func`, which
+  wrongly implied an LLM-prompt coupling); `set_handler()` (was
+  `set_prompt_func`); type `MessageHandler`.
 - Graceful shutdown: `run_forever()` installs SIGINT/SIGTERM handlers and
   logs out cleanly (matters under systemd, which stops with SIGTERM);
   falls back to plain cancellation where signals are unavailable.
@@ -51,7 +56,7 @@ REST API; no official bot API exists.
   `scaffold.py` emits only correct boilerplate (UTF-8 safe on cp949
   Windows); the design is the agent's, from the user's actual needs.
 - Architecture documented in `docs/ARCHITECTURE.md` (with diagrams).
-- `DaouBot` — high-level bot driven solely by a `prompt_func` callback.
+- `DaouBot` — high-level bot driven solely by an `on_message` callback.
 - `RoomRouter` — allowlist-by-default per-room dispatch
   (`room_id` > `room_type` > default > ignore).
 - `Profile` + `daoubot` CLI: `login` (saves `.daoubot/profile.json`),

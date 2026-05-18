@@ -7,12 +7,12 @@ Condensed, self-contained API + gotchas for building bots. (Repo docs:
 
 | Symbol | Purpose |
 |---|---|
-| `DaouBot` | High-level bot. `DaouBot.from_env(prompt_func=...)` resolves connection from env/profile. `run_forever()` = login + poll + graceful SIGINT/SIGTERM. |
+| `DaouBot` | High-level bot. `DaouBot.from_env(on_message=...)` resolves connection from env/profile. `run_forever()` = login + poll + graceful SIGINT/SIGTERM. |
 | `BotClient` | REST wrapper: `login()`, `whoami()`, `discover_company()`, `get_rooms()`, `create_room()`, `open_room()`, `send_message()`, `get_chat_history()`, `mark_read()`. `from_env()` / `from_token()`. |
 | `BotEngine` | Polling engine (used internally by `DaouBot`). |
 | `NewMessage` | Inbound message (see fields below). |
-| `RoomRouter` | Per-room handler dispatch; **allowlist** — unregistered rooms ignored. `add_room(id, fn)`, `add_room_type("SINGLE"/"GROUP", fn)`, `set_default(fn)`, decorators `@router.room(id)` / `@router.room_type(t)` / `@router.default`. Pass the router as `prompt_func`. |
-| `only_when_mentioned(fn, *, include_all=True)` | Wrap a handler so it runs only when `mentions_me` (or `@ALL`). Composable with `prompt_func` or a router handler. |
+| `RoomRouter` | Per-room handler dispatch; **allowlist** — unregistered rooms ignored. `add_room(id, fn)`, `add_room_type("SINGLE"/"GROUP", fn)`, `set_default(fn)`, decorators `@router.room(id)` / `@router.room_type(t)` / `@router.default`. Pass the router as `on_message`. |
+| `only_when_mentioned(fn, *, include_all=True)` | Wrap a handler so it runs only when `mentions_me` (or `@ALL`). Composable with `on_message` or a router handler. |
 | `load_settings(...)` / `Settings` | Resolve base_url/company_id/login_id/password: arg > `DAOU_*` env > profile. Password never from profile. |
 | `Profile` / `load_profile` / `save_profile` | `.daoubot/profile.json` model. |
 | `FileCursorStore` / `MemoryCursorStore` / `CursorStore` | Where "processed up to" is persisted. `DaouBot` defaults to `FileCursorStore` (restart-resume). |
@@ -24,7 +24,7 @@ Condensed, self-contained API + gotchas for building bots. (Repo docs:
 `message_id`, `created_at`, `raw_text` (original incl. `{{...}}`),
 `mentions: list[str]`, `mentions_me: bool`, `mention_all: bool`.
 
-`prompt_func`: `Callable[[NewMessage], str | None | Awaitable[...]]`. Return a
+`on_message`: `Callable[[NewMessage], str | None | Awaitable[...]]`. Return a
 string to reply, `None` for no reply. Sync or async.
 
 ## CLI (`daoubot`)
@@ -61,13 +61,25 @@ string to reply, `None` for no reply. Sync or async.
 
 ```python
 import asyncio
+import os
 from daouoffice import DaouBot, NewMessage
 
-async def handle(msg: NewMessage) -> str | None:
+async def on_message(msg: NewMessage) -> str | None:
     return f"echo: {msg.message_text}"
 
-asyncio.run(DaouBot.from_env(prompt_func=handle).run_forever())
+async def main() -> None:
+    bot = DaouBot(
+        base_url=os.environ["DAOU_BASE_URL"],
+        company_id=os.environ["DAOU_COMPANY_ID"],
+        login_id=os.environ["DAOU_LOGIN_ID"],
+        password=os.environ["DAOU_PASSWORD"],
+        on_message=on_message,
+    )
+    await bot.run_forever()
+
+asyncio.run(main())
 ```
 
-Requires env: `DAOU_BASE_URL`, `DAOU_COMPANY_ID`, `DAOU_LOGIN_ID`,
-`DAOU_PASSWORD` (or a prior `daoubot login`).
+Explicit construction keeps the required inputs visible. `DaouBot.from_env()`
+is a terse shortcut (env/profile) for production/CLI when readability is not
+the goal.

@@ -2,10 +2,10 @@
 """Per-room routing — one bot account, different behavior per room.
 
 Only registered rooms are handled; the bot stays silent everywhere else
-(allowlist). Convention shown here: 1:1 (SINGLE) answers everything, busy
-GROUP rooms only when the bot is @-mentioned.
+(allowlist). Convention: 1:1 (SINGLE) answers everything, busy GROUP rooms
+only when the bot is @-mentioned.
 
-Connection settings: env / profile (see README).
+Connection env vars: the same four shown in bot-echobot / README.
 Optional app config:
     ROOM_STANDUP   a group room id that runs the !standup command
 
@@ -49,7 +49,13 @@ if room_standup:
 
 
 async def main() -> None:
-    bot = DaouBot.from_env(prompt_func=router)
+    bot = DaouBot(
+        base_url=os.environ["DAOU_BASE_URL"],
+        company_id=os.environ["DAOU_COMPANY_ID"],
+        login_id=os.environ["DAOU_LOGIN_ID"],
+        password=os.environ["DAOU_PASSWORD"],
+        on_message=router,
+    )
     await bot.run_forever()
 
 

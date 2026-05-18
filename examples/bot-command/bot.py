@@ -1,21 +1,19 @@
 #!/usr/bin/env python
-"""Command bot — the most common pattern: `!cmd args`.
+"""Command bot — the common `!cmd args` pattern.
 
-DaouOffice has no slash-command framework, so commands are just a text
-convention. This shows a tiny dispatcher with help and unknown-command
-handling — analogous to a Telegram CommandHandler set.
-
-Connection settings: env / profile (see README).
+DaouOffice has no slash-command framework, so commands are a text
+convention. Connection env vars are the same four shown in bot-echobot.
 
     uv run --with python-daouoffice-bot examples/bot-command/bot.py
 
-Try in a room:  !help   /   !echo hello   /   !whoami
+Try in a room:  !help  /  !echo hello  /  !whoami
 """
 
 from __future__ import annotations
 
 import asyncio
 import logging
+import os
 from collections.abc import Awaitable, Callable
 
 from daouoffice import DaouBot, NewMessage
@@ -55,7 +53,7 @@ def cmd_whoami(msg: NewMessage, args: str) -> str:
     return f"{msg.sender_name} (user_id={msg.sender_user_id}, room={msg.room_id})"
 
 
-async def handle(msg: NewMessage) -> str | None:
+async def on_message(msg: NewMessage) -> str | None:
     text = msg.message_text.strip()
     if not text.startswith(PREFIX):
         return None  # not a command → ignore
@@ -68,7 +66,13 @@ async def handle(msg: NewMessage) -> str | None:
 
 
 async def main() -> None:
-    bot = DaouBot.from_env(prompt_func=handle)
+    bot = DaouBot(
+        base_url=os.environ["DAOU_BASE_URL"],
+        company_id=os.environ["DAOU_COMPANY_ID"],
+        login_id=os.environ["DAOU_LOGIN_ID"],
+        password=os.environ["DAOU_PASSWORD"],
+        on_message=on_message,
+    )
     await bot.run_forever()
 
 

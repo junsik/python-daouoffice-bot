@@ -5,7 +5,7 @@ room, and there is no per-room "install" step. So the safe default is an
 *allowlist*: handle the rooms you explicitly registered, ignore the rest.
 
 :class:`RoomRouter` is callable, so pass it straight to ``DaouBot`` as
-``prompt_func``::
+``on_message``::
 
     router = RoomRouter()
 
@@ -18,7 +18,7 @@ room, and there is no per-room "install" step. So the safe default is an
     @router.default                       # optional catch-all
     async def fallback(msg): return None
 
-    bot = DaouBot(..., prompt_func=router)
+    bot = DaouBot(..., on_message=router)
 
 Resolution order: exact ``room_id`` → ``room_type`` → default → ``None``
 (no reply). With no default, unregistered rooms are silently ignored.
@@ -42,7 +42,7 @@ def only_when_mentioned(fn: Handler, *, include_all: bool = True) -> Handler:
 
     The declarative gate for noisy group rooms (the equivalent of subscribing
     to Slack's ``app_mention`` instead of ``message``). Composable with a bare
-    ``prompt_func`` or any :class:`RoomRouter` registration; intentionally not
+    ``on_message`` or any :class:`RoomRouter` registration; intentionally not
     a global engine knob — the policy lives at the handler, where it varies.
 
     Args:
