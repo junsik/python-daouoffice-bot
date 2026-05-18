@@ -1,0 +1,16 @@
+[project]
+name = "python-daouoffice-bot"
+version = "0.1.0"
+requires-python = ">=3.12"
+dependencies = [
+    "httpx[http2]>=0.27",
+    "websockets>=13",
+    "stomper>=0.4",
+    "pydantic>=2.0",
+]
+
+[tool.setuptools.package-dir]
+"" = "."
+
+[tool.setuptools.packages.find]
+include = ["daouoffice"]

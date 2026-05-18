@@ -1,0 +1,40 @@
+# .gitignore for daouoffice-bot
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+.eggs/
+*.egg
+
+# Virtual Env
+.venv/
+venv/
+
+# Captured traffic (may contain tokens)
+*.saz
+
+# Secrets
+.env
+*.pem
+config.local.py
+config.json
+credentials.json
+tokens.json
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+opencode.json

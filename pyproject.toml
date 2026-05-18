@@ -1,0 +1,70 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+dynamic = ["version"]
+name = "python-daouoffice-bot"
+description = "DaouOffice Messenger bot SDK — multi-tenant REST client + polling engine"
+readme = "README.md"
+requires-python = ">=3.12"
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [
+    { name = "junsik" },
+]
+keywords = ["daouoffice", "messenger", "bot", "chat", "sdk"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Communications :: Chat",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+]
+dependencies = [
+    "httpx[http2]>=0.27",
+    "pydantic>=2.0",
+]
+
+[project.optional-dependencies]
+websocket = ["websockets>=12"]
+dev = [
+    "pytest>=8.0",
+    "pytest-asyncio>=0.23",
+    "respx>=0.21",
+    "ruff>=0.5",
+]
+
+[project.scripts]
+daoubot = "daouoffice.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/junsik/python-daouoffice-bot"
+Documentation = "https://github.com/junsik/python-daouoffice-bot#readme"
+"Bug Tracker" = "https://github.com/junsik/python-daouoffice-bot/issues"
+"Source Code" = "https://github.com/junsik/python-daouoffice-bot"
+
+[tool.hatch.version]
+source = "code"
+path = "src/daouoffice/_version.py"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/daouoffice"]
+
+[tool.ruff]
+line-length = 99
+extend-exclude = ["tools"]  # vendored reverse-engineering script
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "PL", "UP", "RUF"]
+# SDK constructors intentionally take many keyword-only options.
+ignore = ["PLR0913"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+asyncio_mode = "auto"
