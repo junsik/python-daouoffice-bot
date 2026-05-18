@@ -77,7 +77,7 @@ content-type: application/json
 ```json
 {
   "platformUserIdList": [
-    "11000022611", "11000022612", "11000062331", ...
+    "11000000002", "11000000003", "11000000005", ...
   ]
 }
 ```
@@ -89,9 +89,9 @@ content-type: application/json
   "message": "성공",
   "data": {
     "connectionStatusDtoList": [
-      {"platformUserId":"11000022611","connectionStatus":"ONLINE"},
-      {"platformUserId":"11000022612","connectionStatus":"OFFLINE"},
-      {"platformUserId":"11000022601","connectionStatus":"ABSENCE"}
+      {"platformUserId":"11000000002","connectionStatus":"ONLINE"},
+      {"platformUserId":"11000000003","connectionStatus":"OFFLINE"},
+      {"platformUserId":"11000000001","connectionStatus":"ABSENCE"}
     ]
   }
 }

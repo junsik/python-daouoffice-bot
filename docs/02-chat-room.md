@@ -17,19 +17,19 @@ Accept: */*
   "data": {
     "elements": [
       {
-        "roomId": "11000303036",
-        "roomName": "김상준, 이경헌, ...",
+        "roomId": "11000000006",
+        "roomName": "홍길동, 임꺽정, ...",
         "roomType": "GROUP",
         "roomMemberCount": 10,
         "unreadMessageCount": 12,
         "latestMessage": {
           "metadata": {"messageType":"CHAT","subType":"TEXT","action":"REPLY"},
-          "sender": {"platformUserId":"11000022611","platformUserName":"정예리","positionName":"팀원"},
+          "sender": {"platformUserId":"11000000002","platformUserName":"홍길동","positionName":"팀원"},
           "chatMessageId": "1505833539940147200",
           "createdAt": "2026-05-18T16:24:52.000+09:00",
           "contents": {"message": {"text":"안녕하세요", "plainText":"안녕하세요"}}
         },
-        "userIdList": ["11000022611","11000022612"],
+        "userIdList": ["11000000002","11000000003"],
         "roomPushFlag": true,
         "roomPinFlag": false,
         "backgroundColor": "#427FFC"
@@ -53,7 +53,7 @@ Accept: */*
 ### Request
 ```json
 {
-  "userList": ["11000022611", "11000022612"],
+  "userList": ["11000000002", "11000000003"],
   "roomName": "대화방 이름",
   "roomType": "GROUP",
   "backgroundColor": "#f0bd03"
@@ -89,9 +89,9 @@ Cookie: AccessToken=...
     "memberList": [
       {
         "roomMemberId": "xxx",
-        "roomMemberName": "박준식",
+        "roomMemberName": "임꺽정",
         "connectionStatus": "OFFLINE",
-        "platformUserId": "11000022612",
+        "platformUserId": "11000000003",
         "positionName": "부장",
         "profileUrl": "..."
       }
@@ -128,11 +128,11 @@ Cookie: AccessToken=...
     "elements": [
       {
         "roomMemberId": "xxx",
-        "roomMemberName": "박준식",
+        "roomMemberName": "임꺽정",
         "profileUrl": "...",
         "connectionStatus": "OFFLINE",
         "lastReadMessageId": "0",
-        "platformUserId": "11000022612",
+        "platformUserId": "11000000003",
         "userStatus": "NORMAL",
         "positionName": "부장",
         "companyUuid": "<COMPANY_UUID>"
@@ -185,7 +185,7 @@ Cookie: AccessToken=...
 
 ### Request
 ```json
-{"platformUserId": "11000054149"}
+{"platformUserId": "11000000004"}
 ```
 
 ### Response

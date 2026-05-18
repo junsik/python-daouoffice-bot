@@ -50,8 +50,8 @@ GET /api/chat/room/1505835441897709568/chat/range?offset=20&messageId=0
         },
         "chatRoomId": "1505835441897709568",
         "sender": {
-          "platformUserId": "11000022612",
-          "platformUserName": "박준식",
+          "platformUserId": "11000000003",
+          "platformUserName": "임꺽정",
           "profilePath": "...",
           "positionName": "부장"
         },
