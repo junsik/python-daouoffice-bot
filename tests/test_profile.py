@@ -71,8 +71,14 @@ def test_cli_login_writes_profile(tmp_path, monkeypatch, capsys) -> None:
     )
     cli_main(
         [
-            "--base-url", BASE, "--company-id", "11000",
-            "--login-id", "acme-bot", "--password", "pw",
+            "--base-url",
+            BASE,
+            "--company-id",
+            "11000",
+            "--login-id",
+            "acme-bot",
+            "--password",
+            "pw",
             "login",
         ]
     )

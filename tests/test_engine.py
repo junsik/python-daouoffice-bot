@@ -1,4 +1,4 @@
-"""Tests for the polling engine: message normalization and dispatch."""
+"""Tests for the polling engine: baseline, dedup, dispatch, own-message skip."""
 
 from __future__ import annotations
 
@@ -9,10 +9,10 @@ from daouoffice.engine import BotEngine
 
 
 class FakeClient:
-    """Minimal stand-in for BotClient used by the engine."""
+    """Minimal stand-in for BotClient; history is mutable between polls."""
 
     def __init__(self, history: list[ChatHistoryItem]) -> None:
-        self._history = history
+        self.history = history
         self.user_id = "BOT"
         self.sent: list[tuple[str, str]] = []
         self.read: list[str] = []
@@ -20,8 +20,8 @@ class FakeClient:
     def get_rooms(self) -> list[ChatRoomItem]:
         return [ChatRoomItem(roomId="r1", roomType="GROUP", unreadMessageCount=1)]
 
-    def get_chat_history(self, room_id: str, *, offset: int = 20) -> list[ChatHistoryItem]:
-        return self._history
+    def get_chat_history(self, room_id: str, *, offset: int = 20):
+        return self.history
 
     def send_message(self, room_id: str, content: str) -> str:
         self.sent.append((room_id, content))
@@ -40,49 +40,60 @@ def _msg(user_id: str, text: str, mid: int) -> ChatHistoryItem:
     )
 
 
-@pytest.mark.asyncio
-async def test_dispatch_replies_and_marks_read() -> None:
-    client = FakeClient([_msg("USER", "hello", 1)])
-    seen = []
-
-    async def on_message(m):
-        seen.append(m.message_text)
-        return "pong"
-
-    engine = BotEngine(client, on_message)
-    await engine._poll_once()
-
-    assert seen == ["hello"]
-    assert client.sent == [("r1", "pong")]
-    assert client.read == ["1"]
+async def _echo(m):
+    return f"re: {m.message_text}"
 
 
 @pytest.mark.asyncio
-async def test_skips_own_messages() -> None:
-    client = FakeClient([_msg("BOT", "from myself", 2)])
-    called = False
+async def test_first_poll_sets_baseline_without_replay() -> None:
+    client = FakeClient([_msg("USER", "old1", 1), _msg("USER", "old2", 2)])
+    engine = BotEngine(client, _echo)
 
-    async def on_message(m):
-        nonlocal called
-        called = True
-        return "x"
+    await engine._poll_once()  # first contact → baseline only
 
-    engine = BotEngine(client, on_message)
-    await engine._poll_once()
-
-    assert called is False
-    assert client.sent == []
+    assert client.sent == []  # backlog not replayed
+    assert client.read == ["2"]  # room marked read up to latest
 
 
 @pytest.mark.asyncio
-async def test_none_reply_still_marks_read() -> None:
-    client = FakeClient([_msg("USER", "noop", 3)])
+async def test_new_message_dispatched_once() -> None:
+    client = FakeClient([_msg("USER", "old", 1)])
+    engine = BotEngine(client, _echo)
+    await engine._poll_once()  # baseline = 1
 
-    async def on_message(m):
-        return None
+    client.history = [_msg("USER", "old", 1), _msg("USER", "hello", 2)]
+    await engine._poll_once()  # only id 2 is new
+    assert client.sent == [("r1", "re: hello")]
 
-    engine = BotEngine(client, on_message)
+    await engine._poll_once()  # same history → no repeat
+    assert client.sent == [("r1", "re: hello")]
+
+
+@pytest.mark.asyncio
+async def test_skips_own_messages_but_advances_baseline() -> None:
+    client = FakeClient([_msg("USER", "old", 1)])
+    engine = BotEngine(client, _echo)
     await engine._poll_once()
 
-    assert client.sent == []
-    assert client.read == ["3"]
+    client.history = [_msg("BOT", "my own reply", 2)]
+    await engine._poll_once()
+    assert client.sent == []  # own message not handled
+
+    client.history = [_msg("USER", "next", 3)]
+    await engine._poll_once()
+    assert client.sent == [("r1", "re: next")]  # baseline moved past 2
+
+
+@pytest.mark.asyncio
+async def test_handler_error_does_not_block_mark_read() -> None:
+    client = FakeClient([_msg("USER", "old", 1)])
+    engine = BotEngine(client, _echo)
+    await engine._poll_once()
+
+    async def boom(_m):
+        raise RuntimeError("handler fail")
+
+    engine._on_message = boom
+    client.history = [_msg("USER", "trigger", 2)]
+    await engine._poll_once()
+    assert "2" in client.read  # still marked read

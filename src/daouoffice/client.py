@@ -190,9 +190,7 @@ class BotClient:
 
         Validate it with :meth:`whoami`; an expired token raises on use.
         """
-        client = cls(
-            "", "", base_url=base_url, access_token=access_token, timeout=timeout
-        )
+        client = cls("", "", base_url=base_url, access_token=access_token, timeout=timeout)
         return client
 
     @property
@@ -228,9 +226,7 @@ class BotClient:
             },
         )
         if resp.status_code != HTTP_OK:
-            raise DaouAuthError(
-                f"Login HTTP {resp.status_code}: {resp.text[:300]}"
-            )
+            raise DaouAuthError(f"Login HTTP {resp.status_code}: {resp.text[:300]}")
         body = resp.json()
         logger.debug("Login response: %s", body)
 

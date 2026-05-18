@@ -1,10 +1,12 @@
 """DaouOffice Messenger Bot — REST polling engine.
 
 This is the single polling implementation used by :class:`daouoffice.DaouBot`.
-It periodically lists rooms, fetches unread messages, normalizes them into
-:class:`~daouoffice.client.NewMessage`, dispatches to a callback, and marks
-them read. The bot's own messages are filtered out using the identity resolved
-at login (no hard-coded user id).
+It periodically lists rooms and, per room with unread messages, dispatches only
+messages newer than the last one it has handled (tracked by ``chatMessageId``).
+
+On first contact with a room the existing backlog is **not** replayed — a
+baseline is set so the bot only reacts to messages that arrive while it is
+running. The bot's own messages are skipped via the identity resolved at login.
 
 Real-time WebSocket/STOMP delivery is experimental and lives in
 ``ws_handler.py``; the polling engine is the supported path.
@@ -46,6 +48,8 @@ class BotEngine:
         self._on_message = on_message
         self._poll_interval = poll_interval
         self._running = False
+        # room_id -> highest chatMessageId already handled (baseline)
+        self._seen: dict[str, int] = {}
 
     async def start(self) -> None:
         """Run the poll loop until :meth:`stop` is called."""
@@ -69,22 +73,60 @@ class BotEngine:
             if room.unreadMessageCount > 0:
                 await self._handle_room(room.roomId, room.roomType)
 
+    @staticmethod
+    def _mid(item) -> int | None:
+        try:
+            return int(item.chatMessageId)
+        except (TypeError, ValueError):
+            return None
+
     async def _handle_room(self, room_id: str, room_type: str) -> None:
         try:
-            history = await asyncio.to_thread(
-                self._client.get_chat_history, room_id, offset=20
-            )
+            history = await asyncio.to_thread(self._client.get_chat_history, room_id, offset=20)
         except Exception:
             logger.exception("Failed to fetch history for %s", room_id)
             return
+        if not history:
+            return
 
+        ids = [m for m in (self._mid(it) for it in history) if m is not None]
+        latest = history[-1].chatMessageId
+
+        baseline = self._seen.get(room_id)
+        if baseline is None:
+            # First time we see this room: don't replay the backlog.
+            self._seen[room_id] = max(ids, default=0)
+            logger.info(
+                "Room %s: baseline at %s (%d backlog message(s) skipped)",
+                room_id,
+                self._seen[room_id],
+                len(history),
+            )
+            await self._mark_read(latest)
+            return
+
+        handled = baseline
         for item in history:
+            mid = self._mid(item)
+            if mid is not None and mid <= baseline:
+                continue  # already handled in a previous cycle
+            if mid is not None:
+                handled = max(handled, mid)
             msg = self._to_message(item, room_type)
             if msg is None:
                 continue
             if msg.sender_user_id == self._client.user_id:
                 continue  # skip our own messages
             await self._dispatch(msg)
+
+        self._seen[room_id] = handled
+        await self._mark_read(latest)
+
+    async def _mark_read(self, message_id) -> None:
+        try:
+            await asyncio.to_thread(self._client.mark_read, message_id)
+        except Exception:
+            logger.exception("mark_read failed for %s", message_id)
 
     def _to_message(self, item, room_type: str) -> NewMessage | None:
         sender = item.sender or {}
@@ -106,14 +148,7 @@ class BotEngine:
         try:
             reply = await self._on_message(msg)
             if reply:
-                await asyncio.to_thread(
-                    self._client.send_message, msg.room_id, reply
-                )
+                await asyncio.to_thread(self._client.send_message, msg.room_id, reply)
                 logger.info("Replied to [%s]", msg.room_id)
         except Exception:
             logger.exception("Handler failed for [%s]", msg.room_id)
-        finally:
-            try:
-                await asyncio.to_thread(self._client.mark_read, msg.message_id)
-            except Exception:
-                logger.exception("mark_read failed for %s", msg.message_id)

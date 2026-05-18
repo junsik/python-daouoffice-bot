@@ -48,9 +48,7 @@ def _settings(args: argparse.Namespace) -> tuple[Profile | None, str, str | None
     base_url = _pick(args.base_url, "DAOU_BASE_URL", prof.base_url if prof else None)
     if not base_url:
         _die("base_url unknown — pass --base-url, set DAOU_BASE_URL, or run `daoubot login`")
-    company_id = _pick(
-        args.company_id, "DAOU_COMPANY_ID", prof.company_id if prof else None
-    )
+    company_id = _pick(args.company_id, "DAOU_COMPANY_ID", prof.company_id if prof else None)
     return prof, base_url, company_id
 
 
@@ -164,9 +162,7 @@ def cmd_room_create(args: argparse.Namespace) -> None:
     client = _authed_client(args)
     try:
         users = [u.strip() for u in args.users.split(",") if u.strip()]
-        room_id = client.create_room(
-            users, room_name=args.name, room_type=args.type
-        )
+        room_id = client.create_room(users, room_name=args.name, room_type=args.type)
         print(f"created room: {room_id}")
     finally:
         client._client.close()

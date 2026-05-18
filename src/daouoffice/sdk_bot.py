@@ -65,13 +65,9 @@ class DaouBot:
         prompt_func: PromptFunc | None = None,
         poll_interval: int = POLL_INTERVAL,
     ) -> None:
-        self._client = BotClient(
-            login_id, password, base_url=base_url, company_id=company_id
-        )
+        self._client = BotClient(login_id, password, base_url=base_url, company_id=company_id)
         self._prompt_func = prompt_func
-        self._engine = BotEngine(
-            self._client, self._on_message, poll_interval=poll_interval
-        )
+        self._engine = BotEngine(self._client, self._on_message, poll_interval=poll_interval)
 
     @property
     def client(self) -> BotClient:
@@ -101,9 +97,7 @@ class DaouBot:
             await self.stop()
 
     async def send_message(self, room_id: str, content: str) -> str:
-        return await asyncio.to_thread(
-            self._client.send_message, room_id, content
-        )
+        return await asyncio.to_thread(self._client.send_message, room_id, content)
 
     # -- internal -------------------------------------------------------
 

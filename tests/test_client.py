@@ -87,9 +87,7 @@ def test_discover_company_companylist() -> None:
             200,
             json={
                 "data": {
-                    "companyList": [
-                        {"companyId": "11000000000", "uuid": "U", "name": "Acme"}
-                    ]
+                    "companyList": [{"companyId": "11000000000", "uuid": "U", "name": "Acme"}]
                 }
             },
         )

@@ -163,10 +163,12 @@ tests/            pytest (네트워크는 respx로 목)
 ```bash
 uv sync --extra dev
 uv run ruff check .
+uv run ruff format --check .
 uv run pytest -q
 ```
 
-기여 가이드는 [CONTRIBUTING.md](CONTRIBUTING.md)를 참고하세요.
+기여 가이드는 [CONTRIBUTING.md](CONTRIBUTING.md), 변경 이력은
+[CHANGELOG.md](CHANGELOG.md)를 참고하세요.
 
 ## 라이선스
 
