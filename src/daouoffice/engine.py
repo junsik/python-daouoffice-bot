@@ -25,20 +25,19 @@ logger = logging.getLogger(__name__)
 
 POLL_INTERVAL = 5
 
-#: Re-deliver until the handler succeeds (a crash/error means retry, so a
-#: duplicate reply is possible). Industry default (Kafka/Slack/Telegram).
-AT_LEAST_ONCE = "at_least_once"
-#: Advance past a message regardless of the handler outcome (a failure means
-#: the message is lost, but never duplicated). Fire-and-forget.
-AT_MOST_ONCE = "at_most_once"
-_DELIVERY_MODES = (AT_LEAST_ONCE, AT_MOST_ONCE)
-
 OnMessageCallback = Callable[[NewMessage], Awaitable[str | None]]
 """Async callback: receives a NewMessage, returns a reply string or None."""
 
 
 class BotEngine:
     """REST polling bot engine.
+
+    Delivery is **at-least-once** (the message-delivery industry standard):
+    a message is re-delivered until its handler returns without raising,
+    processed in order per room. This is not configurable — make handlers
+    idempotent if a duplicate reply would matter. For fire-and-forget, have
+    the handler swallow its own errors (it then never "fails", so it is not
+    retried).
 
     Args:
         client: A logged-in :class:`BotClient`.
@@ -47,13 +46,8 @@ class BotEngine:
         cursors: Where to persist the per-room processed cursor. Defaults to
             an in-memory store (not durable across restarts); pass a
             :class:`~daouoffice.state.FileCursorStore` to resume after restart.
-        delivery: ``"at_least_once"`` (default) re-delivers a message until its
-            handler succeeds — ordered per room, so a failing message blocks
-            newer ones until it succeeds or hits ``max_attempts`` (poison →
-            skipped). ``"at_most_once"`` advances regardless of outcome.
-            Make handlers idempotent if duplicates would matter.
-        max_attempts: at-least-once only — give up on a message after this many
-            failed handler attempts and move on (poison-message guard).
+        max_attempts: give up on a single message after this many failed
+            handler attempts and move on (poison-message guard).
     """
 
     def __init__(
@@ -63,20 +57,16 @@ class BotEngine:
         *,
         poll_interval: int = POLL_INTERVAL,
         cursors: CursorStore | None = None,
-        delivery: str = AT_LEAST_ONCE,
         max_attempts: int = 5,
     ) -> None:
-        if delivery not in _DELIVERY_MODES:
-            raise ValueError(f"delivery must be one of {_DELIVERY_MODES}, got {delivery!r}")
         self._client = client
         self._on_message = on_message
         self._poll_interval = poll_interval
         self._running = False
-        self._delivery = delivery
         self._max_attempts = max_attempts
         # room_id -> highest chatMessageId already handled
         self._cursors: CursorStore = cursors or MemoryCursorStore()
-        # "room_id:mid" -> failed handler attempts (at-least-once only)
+        # "room_id:mid" -> failed handler attempts
         self._attempts: dict[str, int] = {}
 
     async def start(self) -> None:
@@ -153,12 +143,7 @@ class BotEngine:
                 handled = mid  # own / no-text: nothing to deliver, ack it
                 continue
 
-            if self._delivery == AT_MOST_ONCE:
-                handled = mid
-                await self._dispatch(msg)  # advance regardless of outcome
-                continue
-
-            # at-least-once: only advance once the handler succeeds.
+            # Only advance the cursor once the handler succeeds (at-least-once).
             if await self._dispatch(msg):
                 handled = mid
                 self._attempts.pop(f"{room_id}:{mid}", None)
@@ -183,7 +168,7 @@ class BotEngine:
 
         # Read receipts: clear the room only when nothing is pending retry,
         # otherwise leave it unread so the failed message is polled again.
-        if self._delivery == AT_MOST_ONCE or not blocked:
+        if not blocked:
             await self._mark_read(latest)
         elif handled != baseline:
             await self._mark_read(handled)

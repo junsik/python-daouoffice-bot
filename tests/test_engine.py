@@ -5,7 +5,7 @@ from __future__ import annotations
 import pytest
 
 from daouoffice.client import ChatHistoryItem, ChatRoomItem
-from daouoffice.engine import AT_LEAST_ONCE, BotEngine
+from daouoffice.engine import BotEngine
 
 
 class FakeClient:
@@ -84,29 +84,6 @@ async def test_skips_own_messages_but_advances_baseline() -> None:
     assert client.sent == [("r1", "re: next")]  # baseline moved past 2
 
 
-def test_default_delivery_is_at_least_once() -> None:
-    assert BotEngine(FakeClient([]), _echo)._delivery == AT_LEAST_ONCE
-
-
-def test_invalid_delivery_rejected() -> None:
-    with pytest.raises(ValueError, match="delivery"):
-        BotEngine(FakeClient([]), _echo, delivery="bogus")
-
-
-class _Flaky:
-    """Fails the first `fail_times` calls for a given text, then succeeds."""
-
-    def __init__(self, fail_times: int) -> None:
-        self.fail_times = fail_times
-        self.calls: list[str] = []
-
-    async def __call__(self, m):
-        self.calls.append(m.message_text)
-        if self.calls.count(m.message_text) <= self.fail_times:
-            raise RuntimeError("transient")
-        return f"ok: {m.message_text}"
-
-
 @pytest.mark.asyncio
 async def test_at_least_once_retries_until_success_and_keeps_order() -> None:
     client = FakeClient([_msg("USER", "old", 1)])
@@ -149,15 +126,25 @@ async def test_at_least_once_poison_message_is_skipped() -> None:
 
 
 @pytest.mark.asyncio
-async def test_at_most_once_does_not_retry() -> None:
+async def test_handler_swallowing_errors_is_the_fire_and_forget_escape_hatch() -> None:
+    # Delivery is always at-least-once; "fire-and-forget" is expressed by a
+    # handler that never raises (so it never counts as failed / retried).
     client = FakeClient([_msg("USER", "old", 1)])
-    handler = _Flaky(fail_times=99)  # always fails
-    engine = BotEngine(client, handler, delivery="at_most_once")
+    calls: list[str] = []
+
+    async def never_fails(m):
+        calls.append(m.message_text)
+        try:
+            raise RuntimeError("ignored on purpose")
+        except Exception:
+            return None  # swallow → treated as handled
+
+    engine = BotEngine(client, never_fails)
     await engine._poll_once()  # baseline = 1
 
     client.history = [_msg("USER", "old", 1), _msg("USER", "A", 2)]
-    await engine._poll_once()  # A dispatched, fails, but advanced anyway
+    await engine._poll_once()
     await engine._poll_once()  # nothing new → not retried
 
-    assert handler.calls == ["A"]  # called exactly once, message lost
-    assert "2" in client.read  # room cleared (fire-and-forget)
+    assert calls == ["A"]  # processed exactly once
+    assert "2" in client.read  # room cleared

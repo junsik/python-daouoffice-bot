@@ -23,10 +23,11 @@ REST API; no official bot API exists.
   `.daoubot/cursors.json` records how far each room was processed so a restart
   resumes instead of replaying or skipping. `MemoryCursorStore` opts out.
   Catch-up is bounded by the ~20-message REST history window.
-- Developer-selectable delivery guarantee `delivery=`:
-  `"at_least_once"` (default; ordered per room, poison guard via
-  `max_attempts`) or `"at_most_once"`. The engine owns the cursor/ack;
-  handlers stay pure (make them idempotent for at-least-once).
+- Fixed **at-least-once** delivery (the industry standard; not a knob):
+  ordered per-room retry until the handler succeeds, poison guard via
+  `max_attempts`, read receipts only up to the last acked message. The
+  engine owns the cursor/ack; handlers stay pure (make them idempotent;
+  swallow errors for fire-and-forget).
 - Architecture documented in `docs/ARCHITECTURE.md` (with diagrams).
 - `DaouBot` — high-level bot driven solely by a `prompt_func` callback.
 - `RoomRouter` — allowlist-by-default per-room dispatch

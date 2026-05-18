@@ -124,37 +124,38 @@ flowchart TD
 *not* replayed — the bot only reacts to messages that arrive while it runs.
 After that the cursor (persisted) drives resume-after-restart.
 
-## 5. Delivery guarantee (developer-selectable)
+## 5. Delivery guarantee (fixed: at-least-once)
 
 Advancing the cursor == acknowledging a message, so *when* we advance defines
-the guarantee — analogous to epoll level/edge or Kafka auto/manual commit. This
-is a **knob the developer chooses**; the mechanism stays in the engine.
+the guarantee. The SDK does not expose this as a knob: **at-least-once is the
+message-delivery industry standard** (Kafka/SQS/Slack/Telegram) and the right
+default for a chat bot ("never silently drop a user's message"). Offering
+at-most-once as a mode would mostly invite accidental, silent message loss.
 
 ```mermaid
 flowchart LR
-    subgraph at_least_once["delivery=at_least_once (default)"]
-      direction TB
-      a1[handler raises] --> a2[do NOT advance] --> a3[re-polled, ordered] --> a4{max_attempts?}
-      a4 -- exceeded --> a5[poison: skip]
-    end
-    subgraph at_most_once["delivery=at_most_once"]
-      direction TB
-      b1[handler raises] --> b2[advance anyway] --> b3[message lost, no dup]
-    end
+    h[handler raises] --> a[do NOT advance cursor]
+    a --> r[re-polled next cycle, ordered] --> q{attempts &ge; max?}
+    q -- no --> r
+    q -- yes --> p[poison: log, skip, advance]
+    ok[handler returns] --> adv[advance cursor + ack]
 ```
 
-| Mode | On failure | Duplicates | Loss | Use |
-|---|---|---|---|---|
-| `at_least_once` (default) | retry, ordered, poison-cap | possible | no (until poison) | user-facing bots |
-| `at_most_once` | advance | no | possible | fire-and-forget alerts |
+- The SDK guarantees *transport* at-least-once; **business idempotency is the
+  handler's job** — make `prompt_func` idempotent if a duplicate reply matters.
+- A failing message is retried **in order** per room (a stuck message blocks
+  newer ones) until it succeeds or hits `max_attempts` → poison, skipped.
+- Read receipts follow this: marks read only up to the last acked message, so a
+  failed one stays unread and is re-polled; the room is fully cleared only when
+  nothing is pending.
+- **Fire-and-forget** is not a separate mode — a handler that swallows its own
+  errors never "fails", so it is never retried (userland escape hatch).
 
-Industry default is at-least-once (Kafka/Slack/Telegram). The SDK guarantees
-*transport* at-least-once; **business idempotency is the handler's job** — make
-`prompt_func` idempotent if a duplicate reply would matter.
-
-Read receipts follow the guarantee: at-least-once marks read only up to the
-last acked message (so a failed one stays unread and is re-polled);
-at-most-once / fully-drained marks the latest (clears the room).
+> Decision history: an earlier iteration exposed a `delivery=` knob
+> (`at_least_once`/`at_most_once`, epoll-mode style). It was removed: a
+> delivery-semantics choice offloads a distributed-systems decision onto every
+> bot author and the at-most-once path is a silent-loss footgun. A standard
+> exists — the SDK follows it instead of delegating the responsibility.
 
 ## 6. State on disk (`.daoubot/`, gitignored)
 
@@ -171,7 +172,7 @@ at-most-once / fully-drained marks the latest (clears the room).
 | Auto-resolve identity via GraphQL `me` | Removes hard-coded bot user id; needed to skip own messages. |
 | Re-login on 401, not RefreshToken | SAZ shows no refresh endpoint; multi-session makes re-login safe. |
 | Engine owns the cursor/ack | Conventional (Telegram/Kafka/Matrix); the platform gives no server-side queue, so pushing it to handlers would force every author to solve a distributed-systems problem. |
-| Delivery is a knob, default at-least-once | "Never silently drop a user's message" > occasional duplicate; let the developer choose, like epoll modes. |
+| Delivery fixed at at-least-once (no knob) | It is the message-delivery standard; a configurable at-most-once is a silent-loss footgun. Follow the standard, don't delegate the decision. |
 | RoomRouter = allowlist by default | A bot account can be dragged into any room; replying everywhere is a footgun. |
 | LLM excluded from SDK | Single responsibility (messaging). LLM is a handler concern; shown by example. |
 | Polling over WebSocket | REST is fully reverse-engineered and stable; STOMP path is unproven. |
