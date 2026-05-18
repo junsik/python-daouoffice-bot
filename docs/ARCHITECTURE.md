@@ -15,6 +15,32 @@ flowchart LR
     tenant --- rooms
 ```
 
+### Why this exists, and how it differs from a normal bot platform
+
+Telegram/Slack/Discord give you a bot *platform*: a registry (BotFather / app
++ OAuth / dev portal), a token, scoped permissions, and push delivery
+(webhook / Events / Gateway). DaouOffice has **none of that** — no official
+bot API at all. Organizations on DaouOffice still need ChatOps, notifiers and
+assistants; the only path is reverse-engineering the PC messenger's private
+REST API. This project exists so each team does not re-derive that — including
+the non-obvious operational constraints below.
+
+The bot-creation *procedure* is fundamentally different, and that difference
+drives the whole design:
+
+| Difference vs Telegram/Slack | Design consequence in this SDK |
+|---|---|
+| No registry/token — a bot is an admin-issued **normal account** | Auth is account login; identity resolved via GraphQL `me`; `daoubot discover`/`login` onboarding instead of a token paste |
+| No per-chat install — **membership = connection** | No "connect" step; instead `RoomRouter` allowlist so an account dragged into any room doesn't reply everywhere |
+| Account permissions, not scoped bot token | **Dedicated account** is mandatory; `mark_read` is account-global (§6) |
+| No push — must **poll** a shared REST API | Polling engine with a per-room cursor, at-least-once, restart-resume (§4–5) |
+| ~30-min session, no refresh endpoint | Transparent re-login on 401 (§3) |
+| Per-company SaaS, undocumented | Multi-tenant, nothing hard-coded; everything tagged "SAZ-derived / live-unverified" honestly |
+
+So the SDK is not "a Telegram-style framework for DaouOffice" — it is the
+encapsulation of *that procedure and its consequences*. The rest of this
+document is the rationale for each consequence.
+
 ### Non-goals
 
 - **Not** an LLM framework. LLM calls live in the developer's `on_message` (see `examples/bot-assistant`), never in the SDK.
