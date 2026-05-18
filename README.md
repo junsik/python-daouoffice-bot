@@ -166,6 +166,22 @@ npx skills add junsik/python-daouoffice-bot --skill daouoffice-bot
 
 > 이 폴더는 **소비자용 배포물**입니다. 저장소의 `.claude/` (있다면)는 *이 SDK 자체를 개발*하기 위한 로컬 설정이라 gitignore되며, 이 스킬과 무관합니다 — 봇을 만들려면 위처럼 본인 환경에 설치하세요.
 
+### 적용법 (설치 후)
+
+스킬은 별도 명령이 아니라 **요청 내용으로 자동 발동**합니다. 봇을 만들 작업 폴더에서 Claude Code(또는 스킬을 지원하는 Claude.ai/Claude Desktop)를 열고, 그냥 평소처럼 말하면 됩니다:
+
+```text
+다우오피스 봇 만들어줘. 우리 회사는 acme.daouoffice.com 이고,
+#개발-알림 방에서 !배포 명령에만 응답하면 돼.
+```
+
+그러면 스킬이 잡혀서 — (1) 부족한 정보(테넌트·전용 계정·대상 방·트리거·상태·부작용)를 **되묻고**, (2) 결정 매트릭스로 설계를 정한 뒤, (3) `scaffold.py` 로 보일러플레이트를 깔고 핸들러를 구현하고, (4) SDK 불변규칙을 지키며, (5) `daoubot discover`/`login`/`send` 로 라이브 스모크까지 안내합니다. ("스킬 써"라고 명시할 필요 없음 — `다우오피스 봇`/`DaouBot`/`daoubot` 같은 표현이면 발동합니다.)
+
+설치 위치별 적용 범위:
+
+- `~/.claude/skills/daouoffice-bot/` → **모든 프로젝트**에서 발동(권장).
+- 특정 봇 프로젝트의 `<그_프로젝트>/.claude/skills/daouoffice-bot/` → 그 프로젝트에서만. *이 SDK 저장소 자체의 `.claude/` 에는 넣지 마세요* — 거긴 SDK 개발용입니다.
+
 - 스킬은 템플릿 메뉴가 아니라 **설계 가이드**입니다 — AI가 요구사항을 인터뷰하고(테넌트·대상 방·트리거·상태·부작용), 결정 매트릭스로 프리미티브(`on_message`/`RoomRouter`/`only_when_mentioned`/상태/LLM)를 조합해 사용자가 원하는 봇을 만들도록, SDK 불변규칙(계정 전역 read·allowlist·멱등성·없는 API 날조 금지)과 함께 가르칩니다.
 - `scaffold.py` 는 유스케이스를 추측하지 않고 **올바른 보일러플레이트만** 출력합니다(env/프로필 연결 + graceful run + 빈 핸들러). 설계는 AI가 요구사항에서 결정: `python skills/daouoffice-bot/scaffold.py > bot.py`
 
