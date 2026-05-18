@@ -27,6 +27,7 @@ from daouoffice.llm_handler import (
     BaseLlmBackend,
     CliBackend,
 )
+from daouoffice.profile import Profile, load_profile, save_profile
 from daouoffice.sdk_bot import DaouBot
 
 __all__ = (
@@ -44,7 +45,10 @@ __all__ = (
     "DaouBot",
     "DaouConfigError",
     "NewMessage",
+    "Profile",
     "RoomOpenData",
     "__version__",
     "__version_info__",
+    "load_profile",
+    "save_profile",
 )

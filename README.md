@@ -50,18 +50,21 @@ uv sync                 # 또는: pip install -e .
 | `DAOU_LLM_BASE_URL` | (선택) OpenAI 호환 LLM 게이트웨이 |
 | `DAOU_LLM_API_KEY` | (선택) LLM API 키 |
 
-### 회사 id / 봇 사용자 id 조회
+### 온보딩: `login` → 프로필 저장
 
-`companyId`나 봇 계정의 내부 user id를 모를 때:
+처음 한 번 `login` 하면 회사·사용자 정보와 세션 토큰이
+`./.daoubot/profile.json` 에 저장되고(비밀번호는 저장 안 함, `.daoubot/` 는
+gitignore), 이후 명령은 자격증명 없이 그 프로필로 동작합니다. `company_id` 를
+주지 않으면 공개 엔드포인트로 자동 탐색합니다.
 
 ```bash
-# 회사 메타데이터 (인증 불필요)
-daoubot discover --base-url https://yourcompany.daouoffice.com
-
-# 위에서 얻은 company id로 로그인까지 해서 봇 계정 정보 확인
-daoubot discover --base-url https://yourcompany.daouoffice.com \
-  --company-id 11000000000 --login-id my-bot --password '...'
+daoubot login --base-url https://yourcompany.daouoffice.com \
+  --login-id my-bot --password '...'
+# → .daoubot/profile.json 저장 + 회사/사용자 정보 출력 (토큰은 미출력)
 ```
+
+설정 우선순위: **CLI 플래그 > 환경 변수 > 프로필 파일**. 토큰이 만료되면
+자격증명이 있을 때 자동 재로그인하고, 없으면 `daoubot login` 을 다시 안내합니다.
 
 ## 빠른 시작
 
@@ -93,13 +96,18 @@ asyncio.run(main())
 ## CLI
 
 ```bash
-daoubot discover                  # 회사 id / uuid / 도메인 조회
-daoubot whoami                    # 이 봇 계정의 신원 출력
-daoubot rooms                     # 채팅방 목록
-daoubot send <room_id> "<text>"   # 메시지 전송
-daoubot start                     # 폴링 봇 실행
+daoubot login ...                      # 인증 + 프로필 저장 (위 참고)
+daoubot discover --base-url <url>      # 회사 id / uuid / 도메인 (인증 불필요)
+daoubot whoami                         # 저장된 봇 신원 출력
+daoubot rooms                          # 채팅방 목록 (room id 포함)
+daoubot room create --users a,b --name "Bot Test" [--type GROUP]
+daoubot room open <room_id>            # 방 상세 + 구성원
+daoubot send <room_id> "<text>"        # 메시지 전송
+daoubot start                          # 폴링 봇 실행
 ```
 
+개발자는 `login` → `rooms`/`room create` 로 필요한 `company_id`·`user_id`·
+`room_id` 를 손에 넣은 뒤, 그 값들로 SDK 봇을 작성하면 됩니다.
 (설치 없이: `uv run python -m daouoffice.cli rooms`)
 
 ## 예제

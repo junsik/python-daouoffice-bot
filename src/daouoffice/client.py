@@ -151,6 +151,7 @@ class BotClient:
         *,
         base_url: str | None = None,
         company_id: str | None = None,
+        access_token: str = "",
         user_agent: str = DEFAULT_USER_AGENT,
         timeout: float = 30.0,
     ) -> None:
@@ -173,8 +174,25 @@ class BotClient:
             timeout=timeout,
             headers={"User-Agent": user_agent},
         )
-        self.access_token: str = ""
+        self.access_token: str = access_token
         self.identity: BotIdentity | None = None
+
+    @classmethod
+    def from_token(
+        cls,
+        base_url: str,
+        access_token: str,
+        *,
+        timeout: float = 30.0,
+    ) -> BotClient:
+        """Build a client from a previously obtained token (skips login).
+
+        Validate it with :meth:`whoami`; an expired token raises on use.
+        """
+        client = cls(
+            "", "", base_url=base_url, access_token=access_token, timeout=timeout
+        )
+        return client
 
     @property
     def user_id(self) -> str:

@@ -24,6 +24,9 @@ config.json
 credentials.json
 tokens.json
 
+# Saved CLI session/profile (contains session token)
+.daoubot/
+
 # IDE
 .vscode/
 .idea/
