@@ -34,7 +34,7 @@ import logging
 from collections.abc import Awaitable, Callable
 
 from daouoffice.client import BotClient, NewMessage
-from daouoffice.engine import POLL_INTERVAL, BotEngine
+from daouoffice.engine import AT_LEAST_ONCE, POLL_INTERVAL, BotEngine
 from daouoffice.state import CursorStore, FileCursorStore
 
 logger = logging.getLogger(__name__)
@@ -58,6 +58,9 @@ class DaouBot:
             Defaults to a :class:`~daouoffice.state.FileCursorStore`
             (``.daoubot/cursors.json``) so a restart resumes where it left
             off. Pass :class:`~daouoffice.state.MemoryCursorStore` to opt out.
+        delivery: ``"at_least_once"`` (default) or ``"at_most_once"`` — see
+            :class:`~daouoffice.engine.BotEngine`.
+        max_attempts: poison-message guard for at-least-once delivery.
     """
 
     def __init__(
@@ -70,6 +73,8 @@ class DaouBot:
         prompt_func: PromptFunc | None = None,
         poll_interval: int = POLL_INTERVAL,
         cursor_store: CursorStore | None = None,
+        delivery: str = AT_LEAST_ONCE,
+        max_attempts: int = 5,
     ) -> None:
         self._client = BotClient(login_id, password, base_url=base_url, company_id=company_id)
         self._prompt_func = prompt_func
@@ -78,6 +83,8 @@ class DaouBot:
             self._on_message,
             poll_interval=poll_interval,
             cursors=cursor_store or FileCursorStore(),
+            delivery=delivery,
+            max_attempts=max_attempts,
         )
 
     @property

@@ -25,6 +25,14 @@ logger = logging.getLogger(__name__)
 
 POLL_INTERVAL = 5
 
+#: Re-deliver until the handler succeeds (a crash/error means retry, so a
+#: duplicate reply is possible). Industry default (Kafka/Slack/Telegram).
+AT_LEAST_ONCE = "at_least_once"
+#: Advance past a message regardless of the handler outcome (a failure means
+#: the message is lost, but never duplicated). Fire-and-forget.
+AT_MOST_ONCE = "at_most_once"
+_DELIVERY_MODES = (AT_LEAST_ONCE, AT_MOST_ONCE)
+
 OnMessageCallback = Callable[[NewMessage], Awaitable[str | None]]
 """Async callback: receives a NewMessage, returns a reply string or None."""
 
@@ -39,6 +47,13 @@ class BotEngine:
         cursors: Where to persist the per-room processed cursor. Defaults to
             an in-memory store (not durable across restarts); pass a
             :class:`~daouoffice.state.FileCursorStore` to resume after restart.
+        delivery: ``"at_least_once"`` (default) re-delivers a message until its
+            handler succeeds — ordered per room, so a failing message blocks
+            newer ones until it succeeds or hits ``max_attempts`` (poison →
+            skipped). ``"at_most_once"`` advances regardless of outcome.
+            Make handlers idempotent if duplicates would matter.
+        max_attempts: at-least-once only — give up on a message after this many
+            failed handler attempts and move on (poison-message guard).
     """
 
     def __init__(
@@ -48,13 +63,21 @@ class BotEngine:
         *,
         poll_interval: int = POLL_INTERVAL,
         cursors: CursorStore | None = None,
+        delivery: str = AT_LEAST_ONCE,
+        max_attempts: int = 5,
     ) -> None:
+        if delivery not in _DELIVERY_MODES:
+            raise ValueError(f"delivery must be one of {_DELIVERY_MODES}, got {delivery!r}")
         self._client = client
         self._on_message = on_message
         self._poll_interval = poll_interval
         self._running = False
+        self._delivery = delivery
+        self._max_attempts = max_attempts
         # room_id -> highest chatMessageId already handled
         self._cursors: CursorStore = cursors or MemoryCursorStore()
+        # "room_id:mid" -> failed handler attempts (at-least-once only)
+        self._attempts: dict[str, int] = {}
 
     async def start(self) -> None:
         """Run the poll loop until :meth:`stop` is called."""
@@ -111,23 +134,59 @@ class BotEngine:
             await self._mark_read(latest)
             return
 
+        # New messages, oldest first (ordered processing).
+        new_items = sorted(
+            (
+                (mid, item)
+                for item in history
+                if (mid := self._mid(item)) is not None and mid > baseline
+            ),
+            key=lambda pair: pair[0],
+        )
+
         handled = baseline
-        for item in history:
-            mid = self._mid(item)
-            if mid is not None and mid <= baseline:
-                continue  # already handled in a previous cycle / before restart
-            if mid is not None:
-                handled = max(handled, mid)
+        blocked = False
+        for mid, item in new_items:
             msg = self._to_message(item, room_type)
-            if msg is None:
+            dispatchable = msg is not None and msg.sender_user_id != self._client.user_id
+            if not dispatchable:
+                handled = mid  # own / no-text: nothing to deliver, ack it
                 continue
-            if msg.sender_user_id == self._client.user_id:
-                continue  # skip our own messages
-            await self._dispatch(msg)
+
+            if self._delivery == AT_MOST_ONCE:
+                handled = mid
+                await self._dispatch(msg)  # advance regardless of outcome
+                continue
+
+            # at-least-once: only advance once the handler succeeds.
+            if await self._dispatch(msg):
+                handled = mid
+                self._attempts.pop(f"{room_id}:{mid}", None)
+                continue
+            key = f"{room_id}:{mid}"
+            self._attempts[key] = self._attempts.get(key, 0) + 1
+            if self._attempts[key] >= self._max_attempts:
+                logger.error(
+                    "Giving up on message %s in %s after %d attempts (poison)",
+                    mid,
+                    room_id,
+                    self._attempts[key],
+                )
+                self._attempts.pop(key, None)
+                handled = mid  # skip poison message and keep going
+                continue
+            blocked = True  # retry this one next cycle; preserve order
+            break
 
         if handled != baseline:
             self._cursors.set(room_id, handled)
-        await self._mark_read(latest)
+
+        # Read receipts: clear the room only when nothing is pending retry,
+        # otherwise leave it unread so the failed message is polled again.
+        if self._delivery == AT_MOST_ONCE or not blocked:
+            await self._mark_read(latest)
+        elif handled != baseline:
+            await self._mark_read(handled)
 
     async def _mark_read(self, message_id) -> None:
         try:
@@ -150,12 +209,15 @@ class BotEngine:
             created_at=item.createdAt,
         )
 
-    async def _dispatch(self, msg: NewMessage) -> None:
+    async def _dispatch(self, msg: NewMessage) -> bool:
+        """Run the handler and send any reply. Returns True on success."""
         logger.info("[%s] %s: %s", msg.room_id, msg.sender_name, msg.message_text[:80])
         try:
             reply = await self._on_message(msg)
             if reply:
                 await asyncio.to_thread(self._client.send_message, msg.room_id, reply)
                 logger.info("Replied to [%s]", msg.room_id)
+            return True
         except Exception:
             logger.exception("Handler failed for [%s]", msg.room_id)
+            return False

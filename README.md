@@ -107,6 +107,22 @@ asyncio.run(main())
 방당 최근 ~20개 히스토리 창 안으로 제한됩니다(그보다 오래 다운되면 창 밖
 메시지는 복구 불가 — "since id" 엔드포인트가 없음).
 
+**전달 보장(개발자가 선택):** 커서 전진 = ack 시점이므로, epoll 모드처럼
+`delivery` 로 보장 수준을 고릅니다. 커서/ack는 엔진이 소유하고(트랜스포트 관심사),
+핸들러는 순수 함수로 둡니다.
+
+| `delivery` | 의미 | 실패 시 | 적합 |
+|---|---|---|---|
+| `"at_least_once"` (기본) | 핸들러 성공까지 재전달, 방 내 순서 보존 | 재시도(중복 답장 가능), `max_attempts` 초과 시 poison으로 skip | 사용자 응답 봇 |
+| `"at_most_once"` | 결과 무관하게 전진 | 메시지 유실(중복 없음) | fire-and-forget 알림 |
+
+```python
+bot = DaouBot(..., delivery="at_least_once", max_attempts=5)
+```
+
+at-least-once에서는 중복이 의미를 가지면 **핸들러를 멱등하게** 작성하세요
+(Kafka/SQS 교리). 트랜스포트 dedup은 엔진, 비즈니스 멱등성은 핸들러 책임입니다.
+
 ## CLI
 
 ```bash

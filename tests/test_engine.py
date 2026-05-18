@@ -5,7 +5,7 @@ from __future__ import annotations
 import pytest
 
 from daouoffice.client import ChatHistoryItem, ChatRoomItem
-from daouoffice.engine import BotEngine
+from daouoffice.engine import AT_LEAST_ONCE, BotEngine
 
 
 class FakeClient:
@@ -84,16 +84,80 @@ async def test_skips_own_messages_but_advances_baseline() -> None:
     assert client.sent == [("r1", "re: next")]  # baseline moved past 2
 
 
+def test_default_delivery_is_at_least_once() -> None:
+    assert BotEngine(FakeClient([]), _echo)._delivery == AT_LEAST_ONCE
+
+
+def test_invalid_delivery_rejected() -> None:
+    with pytest.raises(ValueError, match="delivery"):
+        BotEngine(FakeClient([]), _echo, delivery="bogus")
+
+
+class _Flaky:
+    """Fails the first `fail_times` calls for a given text, then succeeds."""
+
+    def __init__(self, fail_times: int) -> None:
+        self.fail_times = fail_times
+        self.calls: list[str] = []
+
+    async def __call__(self, m):
+        self.calls.append(m.message_text)
+        if self.calls.count(m.message_text) <= self.fail_times:
+            raise RuntimeError("transient")
+        return f"ok: {m.message_text}"
+
+
 @pytest.mark.asyncio
-async def test_handler_error_does_not_block_mark_read() -> None:
+async def test_at_least_once_retries_until_success_and_keeps_order() -> None:
     client = FakeClient([_msg("USER", "old", 1)])
-    engine = BotEngine(client, _echo)
-    await engine._poll_once()
+    seen: list[str] = []
 
-    async def boom(_m):
-        raise RuntimeError("handler fail")
+    async def fail_A_once(m):
+        seen.append(m.message_text)
+        if m.message_text == "A" and seen.count("A") == 1:
+            raise RuntimeError("transient")
+        return f"ok: {m.message_text}"
 
-    engine._on_message = boom
-    client.history = [_msg("USER", "trigger", 2)]
-    await engine._poll_once()
-    assert "2" in client.read  # still marked read
+    engine = BotEngine(client, fail_A_once)
+    await engine._poll_once()  # baseline = 1
+
+    client.history = [_msg("USER", "old", 1), _msg("USER", "A", 2), _msg("USER", "B", 3)]
+
+    await engine._poll_once()  # A fails once → blocked, B not reached
+    assert client.sent == []
+
+    await engine._poll_once()  # A succeeds, then B succeeds (order preserved)
+    assert client.sent == [("r1", "ok: A"), ("r1", "ok: B")]
+
+
+@pytest.mark.asyncio
+async def test_at_least_once_poison_message_is_skipped() -> None:
+    client = FakeClient([_msg("USER", "old", 1)])
+
+    async def always_fail_A(m):
+        if m.message_text == "A":
+            raise RuntimeError("poison")
+        return f"ok: {m.message_text}"
+
+    engine = BotEngine(client, always_fail_A, max_attempts=2)
+    await engine._poll_once()  # baseline = 1
+    client.history = [_msg("USER", "old", 1), _msg("USER", "A", 2), _msg("USER", "B", 3)]
+
+    await engine._poll_once()  # A attempt 1 → blocked
+    await engine._poll_once()  # A attempt 2 → poison, skip; B delivered
+    assert client.sent == [("r1", "ok: B")]
+
+
+@pytest.mark.asyncio
+async def test_at_most_once_does_not_retry() -> None:
+    client = FakeClient([_msg("USER", "old", 1)])
+    handler = _Flaky(fail_times=99)  # always fails
+    engine = BotEngine(client, handler, delivery="at_most_once")
+    await engine._poll_once()  # baseline = 1
+
+    client.history = [_msg("USER", "old", 1), _msg("USER", "A", 2)]
+    await engine._poll_once()  # A dispatched, fails, but advanced anyway
+    await engine._poll_once()  # nothing new → not retried
+
+    assert handler.calls == ["A"]  # called exactly once, message lost
+    assert "2" in client.read  # room cleared (fire-and-forget)
