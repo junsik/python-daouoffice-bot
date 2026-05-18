@@ -96,6 +96,10 @@ asyncio.run(main())
 주지 않으면 봇은 메시지를 읽기만 합니다(답장 안 함). 30분 만료 시 자격증명이
 있으면 자동 재로그인합니다.
 
+> 봇 계정은 누구나 아무 방에나 초대할 수 있습니다. 특정 방에서만 동작시키려면
+> `RoomRouter` 를 쓰세요 — 등록한 방만 처리하고 나머지는 무시합니다(allowlist).
+> `bot = DaouBot(..., prompt_func=router)`. 예제: `examples/bot-router`.
+
 ## CLI
 
 ```bash
@@ -122,6 +126,7 @@ daoubot start                          # 폴링 봇 실행
 | `bot-echobot` | 받은 메시지를 그대로 반복 |
 | `bot-conversation` | 방별 상태 머신 대화 |
 | `bot-assistant` | 핸들러에서 OpenAI 호환 LLM 호출 (LLM_* env 필요) |
+| `bot-router` | 방별 핸들러 분기 (등록한 방만 처리하는 allowlist) |
 | `bot-error-handler` | 핸들러 예외를 잡아 개발자 방에 알림 |
 
 ```bash
@@ -135,6 +140,7 @@ uv run --with python-daouoffice-bot examples/bot-echobot/bot.py
 | `BotClient` | REST API 래퍼 (로그인·방·메시지·`whoami`·`discover_company`) |
 | `BotEngine` | 폴링 엔진 (단일 구현, async) |
 | `DaouBot` | 고수준 봇 (`prompt_func` + 폴링 + 401 자동 재로그인) |
+| `RoomRouter` | 방별 핸들러 분기 (등록한 방만 처리, 나머지 무시) |
 | `NewMessage` | 정규화된 수신 메시지 |
 | `BotIdentity` | 로그인 시 해석된 봇 자신의 신원 |
 | `Profile` | `daoubot login` 이 저장하는 프로필 (`load_profile`) |

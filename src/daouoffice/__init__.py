@@ -21,6 +21,7 @@ from daouoffice.client import (
 )
 from daouoffice.engine import BotEngine
 from daouoffice.profile import Profile, load_profile, save_profile
+from daouoffice.router import RoomRouter
 from daouoffice.sdk_bot import DaouBot
 
 __all__ = (
@@ -35,6 +36,7 @@ __all__ = (
     "NewMessage",
     "Profile",
     "RoomOpenData",
+    "RoomRouter",
     "__version__",
     "__version_info__",
     "load_profile",
