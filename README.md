@@ -150,15 +150,24 @@ uv run --with python-daouoffice-bot examples/bot-echobot/bot.py
 
 ## AI로 봇 만들기 (Claude Code 스킬)
 
-저장소에 Claude Code **스킬**이 포함돼 있어, 클론한 폴더를 Claude Code로 열면 바로 AI에게 "다우오피스 봇 만들어줘"라고 시켜 스캐폴딩·확장할 수 있습니다.
+배포용 Claude Code **스킬**이 저장소에 포함돼 있어, AI에게 "다우오피스 봇 만들어줘"라고 시켜 스캐폴딩·확장할 수 있습니다.
 
 ```
-.claude/skills/daouoffice-bot/   # SKILL.md + reference.md + scaffold.py
+skills/daouoffice-bot/   # SKILL.md + reference.md + scaffold.py
 ```
 
-- 자동 인식(저장소를 Claude Code로 열면) 또는 `~/.claude/skills/` 로 복사해 전역 사용.
+설치(둘 중 하나) — `~/.claude/skills/` 로 복사하면 전역에서 사용:
+
+```bash
+cp -r skills/daouoffice-bot ~/.claude/skills/        # 수동 복사
+# 또는
+npx skills add junsik/python-daouoffice-bot --skill daouoffice-bot
+```
+
+> 이 폴더는 **소비자용 배포물**입니다. 저장소의 `.claude/` (있다면)는 *이 SDK 자체를 개발*하기 위한 로컬 설정이라 gitignore되며, 이 스킬과 무관합니다 — 봇을 만들려면 위처럼 본인 환경에 설치하세요.
+
 - 스킬은 템플릿 메뉴가 아니라 **설계 가이드**입니다 — AI가 요구사항을 인터뷰하고(테넌트·대상 방·트리거·상태·부작용), 결정 매트릭스로 프리미티브(`on_message`/`RoomRouter`/`only_when_mentioned`/상태/LLM)를 조합해 사용자가 원하는 봇을 만들도록, SDK 불변규칙(계정 전역 read·allowlist·멱등성·없는 API 날조 금지)과 함께 가르칩니다.
-- `scaffold.py` 는 유스케이스를 추측하지 않고 **올바른 보일러플레이트만** 출력합니다(env/프로필 연결 + graceful run + 빈 핸들러). 설계는 AI가 요구사항에서 결정: `python .claude/skills/daouoffice-bot/scaffold.py > bot.py`
+- `scaffold.py` 는 유스케이스를 추측하지 않고 **올바른 보일러플레이트만** 출력합니다(env/프로필 연결 + graceful run + 빈 핸들러). 설계는 AI가 요구사항에서 결정: `python skills/daouoffice-bot/scaffold.py > bot.py`
 
 ## SDK 개요
 

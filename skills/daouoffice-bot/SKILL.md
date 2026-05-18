@@ -45,7 +45,7 @@ Compose these — they are orthogonal (e.g. `RoomRouter` whose group handler is 
 `scaffold.py` prints **only** the correct boilerplate (env/profile config, graceful run loop, empty handler). It does not choose the design — you do, in the handler, from Step 2.
 
 ```bash
-python .claude/skills/daouoffice-bot/scaffold.py > bot.py
+python skills/daouoffice-bot/scaffold.py > bot.py   # path: where the skill is installed
 ```
 
 Then implement the handler for the user's requirement. Construct `DaouBot` **explicitly** with the four `DAOU_*` settings read from the environment, so the generated bot is self-documenting (no hidden config). Read room ids from env/args too. (`DaouBot.from_env(...)` is an optional terse shortcut for production/CLI — fine, but examples favor the explicit form for readability.)

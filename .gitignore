@@ -44,3 +44,7 @@ opencode.json
 
 # scrape-kit plugin runtime (dev tooling, not part of the project)
 .scrape-kit/
+
+# .claude/ is local dev config (project skills for developing THIS repo,
+# settings, scrape-kit). The distributable skill lives in skills/.
+.claude/
