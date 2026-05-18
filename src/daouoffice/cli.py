@@ -196,9 +196,7 @@ def cmd_start(args: argparse.Namespace) -> None:
     password = _pick(args.password, "DAOU_PASSWORD", None)
     if not (login_id and password and company_id):
         _die("`start` needs login_id, password and company_id (flags/env)")
-    bot = DaouBot(
-        login_id, password, base_url=base_url, company_id=company_id, llm=args.llm
-    )
+    bot = DaouBot(login_id, password, base_url=base_url, company_id=company_id)
     asyncio.run(bot.run_forever())
 
 
@@ -229,13 +227,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_send.add_argument("room_id")
     p_send.add_argument("message")
 
-    p_start = sub.add_parser("start", help="run the polling bot")
-    p_start.add_argument(
-        "--llm",
-        default="none",
-        choices=("api", "claude-cli", "ollama", "hermes-cli", "none"),
-        help="LLM backend (default: none)",
-    )
+    sub.add_parser("start", help="run the polling bot (read-only without a handler)")
     return parser
 
 

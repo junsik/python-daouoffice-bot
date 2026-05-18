@@ -1,53 +1,72 @@
 #!/usr/bin/env python
-"""AI assistant bot — replies to every message using an LLM backend.
+"""AI assistant bot — shows how to plug an LLM into a handler.
 
-Configure the DaouOffice connection via DAOU_* env vars (see README), plus the
-LLM backend. For the OpenAI-compatible API backend::
+The SDK intentionally does not bundle an LLM. This example calls any
+OpenAI-compatible chat API from inside ``prompt_func`` — swap it for Anthropic,
+Ollama, a local model, or your own logic as you like.
 
-    export DAOU_LLM_BASE_URL="https://your-gateway/v1"
-    export DAOU_LLM_API_KEY="sk-..."
+Configure the DaouOffice connection via DAOU_* env vars (see README), plus::
 
-    uv run --with python-daouoffice-bot bot.py --llm api --model claude-sonnet-4-5
+    export LLM_BASE_URL="https://your-gateway/v1"   # OpenAI-compatible
+    export LLM_API_KEY="sk-..."
+    export LLM_MODEL="gpt-4o-mini"                   # optional
 
-Or use a local CLI backend::
-
-    uv run --with python-daouoffice-bot bot.py --llm claude-cli
+    uv run --with python-daouoffice-bot --with httpx examples/bot-assistant/bot.py
 """
 
 from __future__ import annotations
 
-import argparse
 import asyncio
 import logging
 import os
 
-from daouoffice import DaouBot
+import httpx
+
+from daouoffice import DaouBot, NewMessage
 
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
 )
 logging.getLogger("httpx").setLevel(logging.WARNING)
+logger = logging.getLogger(__name__)
+
+LLM_BASE_URL = os.environ["LLM_BASE_URL"].rstrip("/")
+LLM_API_KEY = os.environ["LLM_API_KEY"]
+LLM_MODEL = os.getenv("LLM_MODEL", "gpt-4o-mini")
+SYSTEM_PROMPT = "너는 다우오피스 메신저에 연결된 비서야. 간결하고 정확하게 답해."
 
 
-def parse_args() -> argparse.Namespace:
-    p = argparse.ArgumentParser(description="AI assistant bot")
-    p.add_argument(
-        "--llm",
-        default="api",
-        choices=("api", "claude-cli", "ollama", "hermes-cli", "none"),
-    )
-    p.add_argument("--model", default="claude-sonnet-4-5")
-    return p.parse_args()
+async def ask_llm(prompt: str) -> str | None:
+    try:
+        async with httpx.AsyncClient(timeout=30.0) as http:
+            resp = await http.post(
+                f"{LLM_BASE_URL}/chat/completions",
+                headers={"Authorization": f"Bearer {LLM_API_KEY}"},
+                json={
+                    "model": LLM_MODEL,
+                    "messages": [
+                        {"role": "system", "content": SYSTEM_PROMPT},
+                        {"role": "user", "content": prompt},
+                    ],
+                },
+            )
+            resp.raise_for_status()
+            return resp.json()["choices"][0]["message"]["content"].strip()
+    except Exception:
+        logger.exception("LLM call failed")
+        return "죄송합니다. 지금은 응답을 생성할 수 없어요."
+
+
+async def handle(msg: NewMessage) -> str | None:
+    return await ask_llm(msg.message_text)
 
 
 async def main() -> None:
-    args = parse_args()
     bot = DaouBot(
         login_id=os.environ["DAOU_LOGIN_ID"],
         password=os.environ["DAOU_PASSWORD"],
-        llm=args.llm,
-        llm_model=args.model,
+        prompt_func=handle,
     )
     await bot.run_forever()
 

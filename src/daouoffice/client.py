@@ -35,6 +35,7 @@ DEFAULT_USER_AGENT = (
 
 
 HTTP_OK = 200
+HTTP_UNAUTHORIZED = 401
 
 
 class DaouConfigError(ValueError):
@@ -255,6 +256,25 @@ class BotClient:
     def get_auth_headers(self) -> dict[str, str]:
         return {"Cookie": f"AccessToken={self.access_token}"}
 
+    def _can_relogin(self) -> bool:
+        return bool(self._login_id and self._password and self._company_id)
+
+    def _api(self, method: str, path: str, **kwargs) -> httpx.Response:
+        """Authenticated request; re-login once on a 401 if creds are known.
+
+        The AccessToken lives ~30 minutes and there is no observed refresh
+        endpoint, so a long-running bot recovers by re-authenticating. A fresh
+        login is a new server session and does not disturb other sessions.
+        """
+        headers = {**kwargs.pop("headers", {}), **self.get_auth_headers()}
+        resp = self._client.request(method, path, headers=headers, **kwargs)
+        if resp.status_code == HTTP_UNAUTHORIZED and self._can_relogin():
+            logger.info("401 (%s) — session expired, re-authenticating", path)
+            self.login()
+            headers = {**headers, **self.get_auth_headers()}
+            resp = self._client.request(method, path, headers=headers, **kwargs)
+        return resp
+
     def whoami(self) -> BotIdentity:
         """Resolve the logged-in account's own identity via GraphQL ``me``."""
         resp = self._client.post(
@@ -299,7 +319,11 @@ class BotClient:
             resp = client.get("/api/portal/public/auth/company")
             resp.raise_for_status()
             body = resp.json()
-        return body.get("data", body) if isinstance(body, dict) else body
+        data = body.get("data", body) if isinstance(body, dict) else body
+        # Response shape: {"data": {"companyList": [{companyId, uuid, ...}]}}
+        if isinstance(data, dict) and data.get("companyList"):
+            return data["companyList"][0]
+        return data
 
     def logout(self) -> None:
         try:
@@ -315,10 +339,10 @@ class BotClient:
     # -- Chat rooms -----------------------------------------------------
 
     def get_rooms(self, *, page: int = 0, size: int = 20) -> list[ChatRoomItem]:
-        resp = self._client.get(
+        resp = self._api(
+            "GET",
             "/api/chat/room",
             params={"pageNumber": page, "pageSize": size},
-            headers=self.get_auth_headers(),
         )
         if resp.status_code != HTTP_OK:
             logger.error("get_rooms: %s %s", resp.status_code, resp.text[:300])
@@ -342,17 +366,12 @@ class BotClient:
         }
         if room_name:
             body["roomName"] = room_name
-        resp = self._client.post(
-            "/api/chat/room", json=body, headers=self.get_auth_headers()
-        )
+        resp = self._api("POST", "/api/chat/room", json=body)
         resp.raise_for_status()
         return resp.json()["data"]["roomId"]
 
     def open_room(self, room_id: str) -> RoomOpenData:
-        resp = self._client.get(
-            f"/api/chat/room/{room_id}/open",
-            headers=self.get_auth_headers(),
-        )
+        resp = self._api("GET", f"/api/chat/room/{room_id}/open")
         resp.raise_for_status()
         return RoomOpenData(**resp.json()["data"])
 
@@ -361,14 +380,14 @@ class BotClient:
     def send_message(self, room_id: str, content: str) -> str:
         """Send a text message and return the client message id (``cmid``)."""
         cmid = str(uuid.uuid4())
-        resp = self._client.post(
+        resp = self._api(
+            "POST",
             "/api/chat/message",
             json={
                 "chatRoomId": room_id,
                 "cmid": cmid,
                 "content": {"message": content},
             },
-            headers=self.get_auth_headers(),
         )
         resp.raise_for_status()
         return resp.json()["data"]["cmid"]
@@ -376,10 +395,10 @@ class BotClient:
     def get_chat_history(
         self, room_id: str, *, offset: int = 20, message_id: int = 0
     ) -> list[ChatHistoryItem]:
-        resp = self._client.get(
+        resp = self._api(
+            "GET",
             f"/api/chat/room/{room_id}/chat/range",
             params={"offset": offset, "messageId": message_id},
-            headers=self.get_auth_headers(),
         )
         resp.raise_for_status()
         data = resp.json().get("data", {})
@@ -390,7 +409,4 @@ class BotClient:
         return [ChatHistoryItem(**item) for item in items]
 
     def mark_read(self, message_id: int | str) -> None:
-        self._client.post(
-            f"/api/chat/message/{message_id}/read",
-            headers=self.get_auth_headers(),
-        )
+        self._api("POST", f"/api/chat/message/{message_id}/read")

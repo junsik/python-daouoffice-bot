@@ -80,12 +80,39 @@ def test_login_failure_raises() -> None:
 
 
 @respx.mock
-def test_discover_company() -> None:
+def test_discover_company_companylist() -> None:
+    # Real shape: data.companyList[0].{companyId,uuid,...}
     respx.get("/api/portal/public/auth/company").mock(
-        return_value=httpx.Response(200, json={"data": {"id": 11000, "uuid": "X"}})
+        return_value=httpx.Response(
+            200,
+            json={
+                "data": {
+                    "companyList": [
+                        {"companyId": "11000000000", "uuid": "U", "name": "Acme"}
+                    ]
+                }
+            },
+        )
     )
     info = BotClient.discover_company(BASE)
-    assert info == {"id": 11000, "uuid": "X"}
+    assert info["companyId"] == "11000000000"
+
+
+@respx.mock
+def test_auto_relogin_on_401() -> None:
+    _login_routes(respx.mock)
+    # First rooms call 401s, then succeeds after re-login.
+    route = respx.get("/api/chat/room").mock(
+        side_effect=[
+            httpx.Response(401, json={"code": "ROUTE-0004", "message": "Invalid token"}),
+            httpx.Response(200, json={"data": {"elements": [{"roomId": "r1"}]}}),
+        ]
+    )
+    client = BotClient("acme-bot", "p", base_url=BASE, company_id="11000")
+    client.login()
+    rooms = client.get_rooms()
+    assert rooms[0].roomId == "r1"
+    assert route.call_count > 1  # retried after re-auth
 
 
 @respx.mock

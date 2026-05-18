@@ -4,7 +4,8 @@
 
 공식 봇 API가 없는 다우오피스 메신저를, **PC 메신저가 쓰는 REST API를 역분석**하여
 파이썬에서 다룰 수 있게 합니다. 방 목록 조회·메시지 송수신·폴링 기반 응답을 지원하며,
-선택적으로 LLM 백엔드를 붙여 챗봇을 만들 수 있습니다.
+메시지 핸들러(`prompt_func`) 안에서 원하는 로직(LLM 포함)을 자유롭게 붙입니다 —
+SDK 자체는 LLM을 번들하지 않습니다.
 
 [![CI](https://github.com/junsik/python-daouoffice-bot/actions/workflows/ci.yml/badge.svg)](https://github.com/junsik/python-daouoffice-bot/actions/workflows/ci.yml)
 ![Python](https://img.shields.io/badge/python-3.12%2B-blue)
@@ -47,8 +48,9 @@ uv sync                 # 또는: pip install -e .
 | `DAOU_COMPANY_ID` | 숫자 회사 id (`daoubot discover`로 조회) |
 | `DAOU_LOGIN_ID` | 봇 계정 로그인 id |
 | `DAOU_PASSWORD` | 봇 계정 비밀번호 |
-| `DAOU_LLM_BASE_URL` | (선택) OpenAI 호환 LLM 게이트웨이 |
-| `DAOU_LLM_API_KEY` | (선택) LLM API 키 |
+
+> LLM은 SDK에 포함돼 있지 않습니다. `bot-assistant` 예제가 핸들러 안에서
+> OpenAI 호환 API를 호출하는 법을 보여줍니다 (`LLM_BASE_URL`/`LLM_API_KEY`).
 
 ### 온보딩: `login` → 프로필 저장
 
@@ -83,7 +85,6 @@ async def main():
         password="...",                          # 또는 env DAOU_PASSWORD
         base_url="https://acme.daouoffice.com",  # 또는 env DAOU_BASE_URL
         company_id="11000000000",                # 또는 env DAOU_COMPANY_ID
-        llm="none",
         prompt_func=on_message,
     )
     await bot.run_forever()   # Ctrl-C로 종료
@@ -91,7 +92,9 @@ async def main():
 asyncio.run(main())
 ```
 
-메시지 처리 우선순위: `prompt_func` → `!`로 시작하는 명령 → LLM 백엔드 → 무응답.
+`prompt_func` 가 문자열을 반환하면 답장, `None` 이면 무응답입니다. 핸들러를
+주지 않으면 봇은 메시지를 읽기만 합니다(답장 안 함). 30분 만료 시 자격증명이
+있으면 자동 재로그인합니다.
 
 ## CLI
 
@@ -118,7 +121,7 @@ daoubot start                          # 폴링 봇 실행
 |---|---|
 | `bot-echobot` | 받은 메시지를 그대로 반복 |
 | `bot-conversation` | 방별 상태 머신 대화 |
-| `bot-assistant` | LLM 백엔드로 자동 응답 |
+| `bot-assistant` | 핸들러에서 OpenAI 호환 LLM 호출 (LLM_* env 필요) |
 | `bot-error-handler` | 핸들러 예외를 잡아 개발자 방에 알림 |
 
 ```bash
@@ -131,10 +134,10 @@ uv run --with python-daouoffice-bot examples/bot-echobot/bot.py
 |---|---|
 | `BotClient` | REST API 래퍼 (로그인·방·메시지·`whoami`·`discover_company`) |
 | `BotEngine` | 폴링 엔진 (단일 구현, async) |
-| `DaouBot` | 고수준 봇 (`prompt_func` / LLM / 명령) |
+| `DaouBot` | 고수준 봇 (`prompt_func` + 폴링 + 401 자동 재로그인) |
 | `NewMessage` | 정규화된 수신 메시지 |
 | `BotIdentity` | 로그인 시 해석된 봇 자신의 신원 |
-| `ApiBackend` / `CliBackend` | LLM 백엔드 (OpenAI 호환 / CLI) |
+| `Profile` | `daoubot login` 이 저장하는 프로필 (`load_profile`) |
 | `DaouAuthError` / `DaouConfigError` | 예외 |
 
 실시간 WebSocket/STOMP(`ws_handler.py`)는 실험적이며 폴링이 정식 경로입니다.
