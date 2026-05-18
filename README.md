@@ -191,6 +191,7 @@ uv run ruff format --check .
 uv run pytest -q
 ```
 
+설계 배경과 다이어그램은 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md),
 기여 가이드는 [CONTRIBUTING.md](CONTRIBUTING.md), 변경 이력은
 [CHANGELOG.md](CHANGELOG.md)를 참고하세요.
 
