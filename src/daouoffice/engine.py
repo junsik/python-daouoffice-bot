@@ -18,7 +18,7 @@ import asyncio
 import logging
 from collections.abc import Awaitable, Callable
 
-from daouoffice.client import BotClient, NewMessage
+from daouoffice.client import BotClient, NewMessage, parse_mentions
 from daouoffice.state import CursorStore, MemoryCursorStore
 
 logger = logging.getLogger(__name__)
@@ -181,17 +181,22 @@ class BotEngine:
 
     def _to_message(self, item, room_type: str) -> NewMessage | None:
         sender = item.sender or {}
-        text = (item.contents or {}).get("message", {}).get("text", "")
-        if not text:
+        raw = (item.contents or {}).get("message", {}).get("text", "")
+        if not raw:
             return None
+        clean, mentions, mention_all = parse_mentions(raw)
         return NewMessage(
             room_id=item.chatRoomId,
             room_type=room_type,
             sender_user_id=str(sender.get("platformUserId", "")),
             sender_name=sender.get("platformUserName", ""),
-            message_text=text,
+            message_text=clean,
             message_id=str(item.chatMessageId),
             created_at=item.createdAt,
+            raw_text=raw,
+            mentions=mentions,
+            mentions_me=self._client.user_id in mentions,
+            mention_all=mention_all,
         )
 
     async def _dispatch(self, msg: NewMessage) -> bool:

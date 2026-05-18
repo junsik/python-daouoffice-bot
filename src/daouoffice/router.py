@@ -37,6 +37,30 @@ logger = logging.getLogger(__name__)
 Handler = Callable[[NewMessage], Awaitable[str | None] | str | None]
 
 
+def only_when_mentioned(fn: Handler, *, include_all: bool = True) -> Handler:
+    """Wrap a handler so it runs only when the bot is mentioned.
+
+    The declarative gate for noisy group rooms (the equivalent of subscribing
+    to Slack's ``app_mention`` instead of ``message``). Composable with a bare
+    ``prompt_func`` or any :class:`RoomRouter` registration; intentionally not
+    a global engine knob — the policy lives at the handler, where it varies.
+
+    Args:
+        fn: The handler to gate.
+        include_all: Also pass through an ``@ALL`` / mention-everyone message.
+    """
+
+    async def gated(msg: NewMessage) -> str | None:
+        if not (msg.mentions_me or (include_all and msg.mention_all)):
+            return None
+        result = fn(msg)
+        if asyncio.iscoroutine(result):
+            return await result
+        return result  # type: ignore[return-value]
+
+    return gated
+
+
 class RoomRouter:
     """Allowlist-by-default dispatcher keyed by room id / room type."""
 

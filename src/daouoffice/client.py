@@ -17,8 +17,9 @@ from __future__ import annotations
 
 import logging
 import os
+import re
 import uuid
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 import httpx
 from pydantic import BaseModel, ConfigDict
@@ -97,9 +98,43 @@ class RoomOpenData(BaseModel):
     backgroundColor: str | None = None
 
 
+# Inline mention token in content.message (see docs/03-messages.md §3.6):
+#   {{<uuid>::USER::@<name>::<userId>}}   or   {{<uuid>::ALL::@ALL}}
+_MENTION_RE = re.compile(
+    r"\{\{[0-9a-fA-F-]+::(?P<type>USER|ALL)::@(?P<name>[^:}]+)(?:::(?P<uid>\d+))?\}\}"
+)
+
+
+def parse_mentions(text: str) -> tuple[str, list[str], bool]:
+    """Parse mention tokens out of a raw message body.
+
+    Returns ``(clean_text, mentioned_user_ids, mention_all)`` where
+    ``clean_text`` has each token replaced by a human-readable ``@name``.
+    """
+    if not text or "{{" not in text:
+        return text, [], False
+    user_ids: list[str] = []
+    mention_all = False
+
+    def _sub(m: re.Match[str]) -> str:
+        nonlocal mention_all
+        if m.group("type") == "ALL":
+            mention_all = True
+        elif m.group("uid"):
+            user_ids.append(m.group("uid"))
+        return f"@{m.group('name')}"
+
+    clean = _MENTION_RE.sub(_sub, text).strip()
+    return clean, user_ids, mention_all
+
+
 @dataclass(slots=True)
 class NewMessage:
-    """A single inbound chat message, normalized from the history payload."""
+    """A single inbound chat message, normalized from the history payload.
+
+    ``message_text`` is human-readable (mention tokens rendered as ``@name``);
+    ``raw_text`` keeps the original wire text including ``{{...}}`` tokens.
+    """
 
     room_id: str
     room_type: str
@@ -108,6 +143,10 @@ class NewMessage:
     message_text: str
     message_id: str
     created_at: str
+    raw_text: str = ""
+    mentions: list[str] = field(default_factory=list)
+    mentions_me: bool = False
+    mention_all: bool = False
 
 
 @dataclass(slots=True)

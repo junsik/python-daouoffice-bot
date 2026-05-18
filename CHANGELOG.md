@@ -28,6 +28,12 @@ REST API; no official bot API exists.
   `max_attempts`, read receipts only up to the last acked message. The
   engine owns the cursor/ack; handlers stay pure (make them idempotent;
   swallow errors for fire-and-forget).
+- Mention parsing: inline `{{uuid::USER::@name::id}}` / `{{uuid::ALL::@ALL}}`
+  tokens are parsed into `NewMessage.mentions` / `mentions_me` / `mention_all`,
+  with a human-readable `message_text` and original `raw_text`. New
+  `only_when_mentioned(handler)` filter gates noisy group rooms (no global
+  knob — policy stays declarative). Encoding documented in
+  `docs/03-messages.md` §3.6.
 - Architecture documented in `docs/ARCHITECTURE.md` (with diagrams).
 - `DaouBot` — high-level bot driven solely by a `prompt_func` callback.
 - `RoomRouter` — allowlist-by-default per-room dispatch

@@ -100,6 +100,16 @@ asyncio.run(main())
 > `RoomRouter` 를 쓰세요 — 등록한 방만 처리하고 나머지는 무시합니다(allowlist).
 > `bot = DaouBot(..., prompt_func=router)`. 예제: `examples/bot-router`.
 
+**멘션:** 다우오피스 멘션은 본문 인라인 토큰입니다(전체 공개, 비공개 아님 —
+[docs/03-messages.md](docs/03-messages.md) §3.6). SDK가 파싱해 `msg.mentions` /
+`msg.mentions_me` / `msg.mention_all` 와 사람이 읽는 `message_text`(토큰 →
+`@이름`), 원본 `raw_text` 를 제공합니다. 바쁜 그룹에서 멘션 시에만 응답하려면
+`only_when_mentioned(handler)` 로 감싸세요(글로벌 노브 아님 — 정책은 선언으로).
+
+```python
+bot = DaouBot(..., prompt_func=only_when_mentioned(handle))
+```
+
 **재시작 복구:** "어디까지 처리했는지"(방별 마지막 메시지 id)는 기본적으로
 `.daoubot/cursors.json` 에 저장됩니다 — 봇이 재시작해도 백로그를 다시 처리하거나
 다운타임 메시지를 건너뛰지 않고 이어받습니다. 비영속을 원하면
@@ -158,6 +168,7 @@ uv run --with python-daouoffice-bot examples/bot-echobot/bot.py
 | `BotEngine` | 폴링 엔진 (단일 구현, async) |
 | `DaouBot` | 고수준 봇 (`prompt_func` + 폴링 + 401 자동 재로그인) |
 | `RoomRouter` | 방별 핸들러 분기 (등록한 방만 처리, 나머지 무시) |
+| `only_when_mentioned` | 봇 멘션(`@봇`/`@전체`) 시에만 핸들러 실행 |
 | `FileCursorStore` / `MemoryCursorStore` | 처리 위치 영속/비영속 저장 |
 | `NewMessage` | 정규화된 수신 메시지 |
 | `BotIdentity` | 로그인 시 해석된 봇 자신의 신원 |

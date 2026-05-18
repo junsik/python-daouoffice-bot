@@ -174,6 +174,7 @@ flowchart LR
 | Engine owns the cursor/ack | Conventional (Telegram/Kafka/Matrix); the platform gives no server-side queue, so pushing it to handlers would force every author to solve a distributed-systems problem. |
 | Delivery fixed at at-least-once (no knob) | It is the message-delivery standard; a configurable at-most-once is a silent-loss footgun. Follow the standard, don't delegate the decision. |
 | RoomRouter = allowlist by default | A bot account can be dragged into any room; replying everywhere is a footgun. |
+| Mentions: SDK parses, gating is declarative (no knob) | Token parsing is platform knowledge the SDK must own; "all vs mention-only" has no single right answer, so it is a composable filter (`only_when_mentioned`), not a global mode — same principle as the dropped delivery knob. |
 | LLM excluded from SDK | Single responsibility (messaging). LLM is a handler concern; shown by example. |
 | Polling over WebSocket | REST is fully reverse-engineered and stable; STOMP path is unproven. |
 
