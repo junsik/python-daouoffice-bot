@@ -58,7 +58,7 @@ Then implement the handler for the user's requirement. Construct `DaouBot` **exp
 - **Dedicated account only** — the bot's `mark_read` clears a human's unread.
 - Handler returns fast or is `async`; blocking it stalls all polling.
 - One bot process per account (duplicate handling + `mark_read` races).
-- DaouOffice has **no** webhooks, inline keyboards, slash-command framework, BotFather, or working WebSocket. If the user asks for these, say so — never fabricate an API. Mentions are pre-parsed (`msg.mentions_me/.mention_all/ .mentions`, `.raw_text`); don't regex `message_text`.
+- DaouOffice has **no** webhooks, inline keyboards, slash-command framework, BotFather, or working WebSocket. If the user asks for these, say so — never fabricate an API. Mentions are pre-parsed (`msg.mentions_me`/`.mention_all`/`.mentions`, `.raw_text`); don't regex `message_text`.
 
 ## Step 5 — Onboard & verify
 
