@@ -26,7 +26,7 @@ from pathlib import Path
 from urllib.parse import urlparse
 
 import httpx
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, field_validator
 
 logger = logging.getLogger(__name__)
 
@@ -111,6 +111,18 @@ class ChatHistoryItem(BaseModel):
     contents: dict = {}
     metadata: dict = {}
     messageStatus: dict | str = ""
+
+    @field_validator("sender", "contents", "metadata", mode="before")
+    @classmethod
+    def _none_to_empty_dict(cls, v: object) -> object:
+        # The server sends these as ``null`` for system/empty messages
+        # (e.g. a member-left notice has no contents); treat as empty.
+        return {} if v is None else v
+
+    @field_validator("messageStatus", mode="before")
+    @classmethod
+    def _none_to_empty_str(cls, v: object) -> object:
+        return "" if v is None else v
 
 
 class RoomOpenData(BaseModel):

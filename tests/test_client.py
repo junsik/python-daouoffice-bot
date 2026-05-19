@@ -8,7 +8,12 @@ import httpx
 import pytest
 import respx
 
-from daouoffice.client import BotClient, DaouAuthError, DaouConfigError
+from daouoffice.client import (
+    BotClient,
+    ChatHistoryItem,
+    DaouAuthError,
+    DaouConfigError,
+)
 
 BASE = "https://acme.daouoffice.com"
 
@@ -171,3 +176,20 @@ def test_send_file_uploads_then_attaches(tmp_path) -> None:
     # sender is the resolved bot identity, not hard-coded
     assert att["sender"]["platformUserId"] == "42"
     assert att["sender"]["companyUuid"] == "ACME-UUID"
+
+
+def test_chat_history_item_tolerates_null_fields() -> None:
+    # System/empty messages (e.g. member-left notices) arrive with
+    # contents/sender/metadata == null; the model must not reject them.
+    item = ChatHistoryItem(
+        chatRoomId="r1",
+        chatMessageId=42,
+        sender=None,
+        contents=None,
+        metadata=None,
+        messageStatus=None,
+    )
+    assert item.sender == {}
+    assert item.contents == {}
+    assert item.metadata == {}
+    assert item.messageStatus == ""
