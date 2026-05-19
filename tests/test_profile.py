@@ -167,6 +167,35 @@ def test_cli_rooms_reuses_saved_token(tmp_path, monkeypatch) -> None:
 
 
 @respx.mock
+def test_cli_whoami_prints_identity(tmp_path, monkeypatch, capsys) -> None:
+    monkeypatch.chdir(tmp_path)
+    save_profile(
+        Profile(base_url=BASE, company_id="11000", access_token="tok"),
+        base_dir=tmp_path,
+    )
+    respx.post("/api/portal/graphql").mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "data": {
+                    "me": {
+                        "id": 42,
+                        "name": "Bot",
+                        "loginId": "acme-bot",
+                        "company": {"id": 11000, "uuid": "U", "domain": "acme"},
+                    }
+                }
+            },
+        )
+    )
+    # Regression: BotIdentity is a slots dataclass (no __dict__); whoami
+    # must serialize it without AttributeError.
+    cli_main(["whoami"])
+    out = json.loads(capsys.readouterr().out)
+    assert out["user_id"] == "42" and out["login_id"] == "acme-bot"
+
+
+@respx.mock
 def test_cli_auto_relogins_from_saved_password(tmp_path, monkeypatch) -> None:
     monkeypatch.chdir(tmp_path)
     save_profile(

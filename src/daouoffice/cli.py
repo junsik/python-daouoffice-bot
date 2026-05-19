@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import dataclasses
 import getpass
 import json
 import os
@@ -209,7 +210,7 @@ def cmd_discover(args: argparse.Namespace) -> None:
 def cmd_whoami(args: argparse.Namespace) -> None:
     client = _authed_client(args)
     try:
-        print(json.dumps(client.identity.__dict__, indent=2, ensure_ascii=False))
+        print(json.dumps(dataclasses.asdict(client.identity), indent=2, ensure_ascii=False))
     finally:
         client._client.close()
 
