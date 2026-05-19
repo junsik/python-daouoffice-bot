@@ -136,7 +136,11 @@ daoubot room create --users a,b --name "Bot Test" [--type GROUP]
 daoubot room open <room_id>            # 방 상세 + 구성원
 daoubot send <room_id> "<text>"        # 메시지 전송
 daoubot start                          # 폴링 봇 실행
+
+daoubot --config bots/a.json login ... # 프로필 파일 위치 분리(멀티 봇/테넌트)
 ```
+
+`--password` 를 생략하면 숨김 프롬프트로 입력받습니다(argv·히스토리 노출 방지).
 
 개발자는 `login` → `rooms`/`room create` 로 필요한 `company_id`·`user_id`·`room_id` 를 손에 넣은 뒤, 그 값들로 SDK 봇을 작성하면 됩니다. (설치 없이: `uv run python -m daouoffice.cli rooms`)
 
@@ -203,7 +207,7 @@ npx skills add junsik/python-daouoffice-bot --skill daouoffice-bot
 | `DaouBot` | 고수준 봇 (`on_message` + 폴링 + 401 자동 재로그인) |
 | `RoomRouter` | 방별 핸들러 분기 (등록한 방만 처리, 나머지 무시) |
 | `only_when_mentioned` | 봇 멘션(`@봇`/`@전체`) 시에만 핸들러 실행 |
-| `load_settings` / `.from_env()` | env·프로필에서 연결설정 단일 조회 |
+| `load_settings` / `Settings` / `.from_env()` | env·프로필에서 연결설정 단일 조회 |
 | `FileCursorStore` / `MemoryCursorStore` | 처리 위치 영속/비영속 저장 |
 | `NewMessage` | 정규화된 수신 메시지 |
 | `BotIdentity` | 로그인 시 해석된 봇 자신의 신원 |
@@ -215,11 +219,14 @@ npx skills add junsik/python-daouoffice-bot --skill daouoffice-bot
 ## 프로젝트 구조
 
 ```
-src/daouoffice/   SDK 패키지 (import daouoffice)
-examples/         실행 가능한 예제 봇
-docs/             역분석된 API 엔드포인트 문서
-tools/            SAZ 캡처 분석 스크립트 (개발용)
-tests/            pytest (네트워크는 respx로 목)
+src/daouoffice/         SDK 패키지 (import daouoffice)
+examples/               실행 가능한 예제 봇 (echobot/command/conversation/
+                        assistant/router/error-handler)
+skills/daouoffice-bot/  배포용 에이전트 스킬 (SKILL.md + reference.md + scaffold.py)
+docs/                   ARCHITECTURE.md (설계 근거) + api/ (역분석 엔드포인트 레퍼런스)
+tools/                  SAZ 캡처 분석 스크립트 (개발용)
+tests/                  pytest (네트워크는 respx로 목)
+profile.example.json    프로필 파일 형태 예시 (비밀번호·토큰 없음)
 ```
 
 ## 개발
