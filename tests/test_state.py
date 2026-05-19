@@ -42,7 +42,7 @@ class _FakeClient:
     def get_chat_history(self, room_id, *, offset=20):
         return self.history
 
-    def send_message(self, room_id, content):
+    def send_message(self, room_id, content, *, reply_to=None):
         self.sent.append((room_id, content))
         return "cmid"
 

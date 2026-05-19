@@ -14,7 +14,7 @@ class FakeClient:
     def __init__(self, history: list[ChatHistoryItem]) -> None:
         self.history = history
         self.user_id = "BOT"
-        self.sent: list[tuple[str, str]] = []
+        self.sent: list[tuple[str, str, str | None]] = []
         self.read: list[str] = []
 
     def get_rooms(self) -> list[ChatRoomItem]:
@@ -23,8 +23,8 @@ class FakeClient:
     def get_chat_history(self, room_id: str, *, offset: int = 20):
         return self.history
 
-    def send_message(self, room_id: str, content: str) -> str:
-        self.sent.append((room_id, content))
+    def send_message(self, room_id: str, content: str, *, reply_to=None) -> str:
+        self.sent.append((room_id, content, reply_to))
         return "cmid"
 
     def mark_read(self, message_id) -> None:
@@ -88,10 +88,10 @@ async def test_new_message_dispatched_once() -> None:
 
     client.history = [_msg("USER", "old", 1), _msg("USER", "hello", 2)]
     await engine._poll_once()  # only id 2 is new
-    assert client.sent == [("r1", "re: hello")]
+    assert client.sent == [("r1", "re: hello", "2")]  # threaded to msg 2
 
     await engine._poll_once()  # same history → no repeat
-    assert client.sent == [("r1", "re: hello")]
+    assert client.sent == [("r1", "re: hello", "2")]
 
 
 @pytest.mark.asyncio
@@ -159,7 +159,7 @@ async def test_skips_own_messages_but_advances_baseline() -> None:
 
     client.history = [_msg("USER", "next", 3)]
     await engine._poll_once()
-    assert client.sent == [("r1", "re: next")]  # baseline moved past 2
+    assert client.sent == [("r1", "re: next", "3")]  # baseline moved past 2
 
 
 @pytest.mark.asyncio
@@ -182,7 +182,7 @@ async def test_at_least_once_retries_until_success_and_keeps_order() -> None:
     assert client.sent == []
 
     await engine._poll_once()  # A succeeds, then B succeeds (order preserved)
-    assert client.sent == [("r1", "ok: A"), ("r1", "ok: B")]
+    assert client.sent == [("r1", "ok: A", "2"), ("r1", "ok: B", "3")]
 
 
 @pytest.mark.asyncio
@@ -200,7 +200,7 @@ async def test_at_least_once_poison_message_is_skipped() -> None:
 
     await engine._poll_once()  # A attempt 1 → blocked
     await engine._poll_once()  # A attempt 2 → poison, skip; B delivered
-    assert client.sent == [("r1", "ok: B")]
+    assert client.sent == [("r1", "ok: B", "3")]
 
 
 @pytest.mark.asyncio
@@ -239,10 +239,10 @@ async def test_burst_not_stranded_after_badge_cleared() -> None:
 
     # All four are dispatched in order despite unreadMessageCount == 0.
     assert client.sent == [
-        ("r1", "re: 2"),
-        ("r1", "re: 3"),
-        ("r1", "re: 4"),
-        ("r1", "re: 5"),
+        ("r1", "re: 2", "2"),
+        ("r1", "re: 3", "3"),
+        ("r1", "re: 4", "4"),
+        ("r1", "re: 5", "5"),
     ]
 
     await engine._poll_once()  # caught up → nothing repeats
@@ -272,3 +272,23 @@ async def test_handler_swallowing_errors_is_the_fire_and_forget_escape_hatch() -
 
     assert calls == ["A"]  # processed exactly once
     assert "2" in client.read  # room cleared
+
+
+@pytest.mark.asyncio
+async def test_markdown_flag_renders_reply_else_verbatim() -> None:
+    async def md(m):
+        return "**hi** _there_"
+
+    client = FakeClient([_msg("USER", "old", 1)])
+    engine = BotEngine(client, md, markdown=True)
+    await engine._poll_once()  # baseline = 1
+    client.history = [_msg("USER", "old", 1), _msg("USER", "ping", 2)]
+    await engine._poll_once()
+    assert client.sent == [("r1", "<b>hi</b> <i>there</i>", "2")]
+
+    plain = FakeClient([_msg("USER", "old", 1)])
+    engine2 = BotEngine(plain, md)  # markdown off (default)
+    await engine2._poll_once()
+    plain.history = [_msg("USER", "old", 1), _msg("USER", "ping", 2)]
+    await engine2._poll_once()
+    assert plain.sent == [("r1", "**hi** _there_", "2")]  # verbatim

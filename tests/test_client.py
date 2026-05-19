@@ -142,6 +142,26 @@ def test_get_rooms_and_send() -> None:
 
 
 @respx.mock
+def test_send_message_reply_to_sets_parent_chat_message_id() -> None:
+    _login_routes(respx.mock)
+    route = respx.post("/api/chat/message").mock(
+        return_value=httpx.Response(200, json={"data": {"cmid": "c2"}})
+    )
+    client = BotClient("acme-bot", "p", base_url=BASE, company_id="11000")
+    client.login()
+
+    assert client.send_message("r1", "answer", reply_to="987654321") == "c2"
+    body = json.loads(route.calls.last.request.content)
+    assert body["content"]["message"] == "answer"
+    assert body["content"]["parentChatMessageId"] == "987654321"
+
+    # No reply_to → field absent (a plain message, not a threaded reply).
+    client.send_message("r1", "plain")
+    plain = json.loads(route.calls.last.request.content)
+    assert "parentChatMessageId" not in plain["content"]
+
+
+@respx.mock
 def test_send_file_uploads_then_attaches(tmp_path) -> None:
     _login_routes(respx.mock)
     upload = respx.post("/api/upload/attach/app").mock(

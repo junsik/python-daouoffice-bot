@@ -22,6 +22,7 @@ import logging
 from collections.abc import Awaitable, Callable
 
 from daouoffice.client import BotClient, NewMessage, parse_mentions
+from daouoffice.markdown import to_chat_html
 from daouoffice.state import CursorStore, MemoryCursorStore
 
 logger = logging.getLogger(__name__)
@@ -51,6 +52,9 @@ class BotEngine:
             :class:`~daouoffice.state.FileCursorStore` to resume after restart.
         max_attempts: give up on a single message after this many failed
             handler attempts and move on (poison-message guard).
+        markdown: render each handler reply from Markdown to the chat-HTML
+            subset (bold/italic/lists) before sending. Off by default —
+            replies are sent verbatim.
     """
 
     def __init__(
@@ -61,12 +65,14 @@ class BotEngine:
         poll_interval: int = POLL_INTERVAL,
         cursors: CursorStore | None = None,
         max_attempts: int = 5,
+        markdown: bool = False,
     ) -> None:
         self._client = client
         self._on_message = on_message
         self._poll_interval = poll_interval
         self._running = False
         self._max_attempts = max_attempts
+        self._render = to_chat_html if markdown else None
         # room_id -> highest chatMessageId already handled
         self._cursors: CursorStore = cursors or MemoryCursorStore()
         # "room_id:mid" -> failed handler attempts
@@ -236,8 +242,19 @@ class BotEngine:
         try:
             reply = await self._on_message(msg)
             if reply:
-                await asyncio.to_thread(self._client.send_message, msg.room_id, reply)
-                logger.info("Replied to [%s]", msg.room_id)
+                if self._render is not None:
+                    reply = self._render(reply)
+                # A handler reply is, by definition, a response to this exact
+                # message — post it as a threaded reply so the quote shows
+                # what it answers (not a policy knob; reply attribution is a
+                # delivery detail the SDK owns, like at-least-once).
+                await asyncio.to_thread(
+                    self._client.send_message,
+                    msg.room_id,
+                    reply,
+                    reply_to=msg.message_id,
+                )
+                logger.info("Replied to [%s] (re: %s)", msg.room_id, msg.message_id)
             return True
         except Exception:
             logger.exception("Handler failed for [%s]", msg.room_id)

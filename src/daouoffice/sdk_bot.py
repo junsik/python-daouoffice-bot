@@ -139,6 +139,9 @@ class DaouBot:
         cursor_store: where the processed-message cursor is persisted; default
             :class:`~daouoffice.state.FileCursorStore` (resume after restart).
         max_attempts: poison-message guard (delivery is always at-least-once).
+        markdown: render replies from Markdown to the chat's HTML subset
+            (``**bold**``/``*italic*``/numbered + bullet lists; the only
+            styles the chat honors). Off by default — replies sent verbatim.
         client: advanced/internal — use a pre-built :class:`BotClient`.
     """
 
@@ -153,6 +156,7 @@ class DaouBot:
         poll_interval: int = POLL_INTERVAL,
         cursor_store: CursorStore | None = None,
         max_attempts: int = 5,
+        markdown: bool = False,
         client: BotClient | None = None,
         base_dir: str | os.PathLike[str] | None = None,
     ) -> None:
@@ -170,6 +174,7 @@ class DaouBot:
             poll_interval=poll_interval,
             cursors=cursor_store or FileCursorStore(base_dir),
             max_attempts=max_attempts,
+            markdown=markdown,
         )
 
     @property

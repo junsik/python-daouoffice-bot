@@ -501,14 +501,20 @@ class BotClient:
         content: str = "",
         *,
         attachments: list[dict] | None = None,
+        reply_to: str | None = None,
     ) -> str:
         """Send a message (optionally with uploaded attachments).
 
         ``attachments`` is a list of dicts returned by
-        :meth:`upload_attachment`. Returns the client message id (``cmid``).
+        :meth:`upload_attachment`. ``reply_to`` is the ``chatMessageId`` of an
+        existing message to post this as a threaded reply to (the inbound
+        :attr:`NewMessage.message_id`); the client renders a quote of it.
+        Returns the client message id (``cmid``).
         """
         cmid = str(uuid.uuid4())
         body: dict = {"message": content}
+        if reply_to:
+            body["parentChatMessageId"] = str(reply_to)
         if attachments:
             body["attachmentList"] = [self._attachment_entry(a) for a in attachments]
         resp = self._api(

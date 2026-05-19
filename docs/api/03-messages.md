@@ -22,6 +22,42 @@
 }
 ```
 
+### 답장(인용 회신)
+
+같은 엔드포인트에 `content.parentChatMessageId` 만 추가하면 답장이 된다 — 값은 인용할 메시지의 `chatMessageId`(수신 메시지의 `NewMessage.message_id`). 응답 형식은 일반 전송과 동일하다.
+
+```json
+{
+  "chatRoomId": "1505835441897709568",
+  "cmid": "a6ee32d1-93f6-412c-8e1d-6515dee26171",
+  "content": {"message": "메시지 내용", "parentChatMessageId": "1505833539940147200"}
+}
+```
+
+엔진은 핸들러가 반환한 답을 그 답을 유발한 메시지에 대한 응답으로 보므로 항상 트리거 메시지로 자동 연결한다(정책 노브가 아니라 at-least-once 처럼 SDK 가 책임지는 전달 속성). 저수준으로 직접 지정하려면 `BotClient.send_message(room_id, text, reply_to=message_id)`. 이 계약은 PC 메신저 라이브 요청/응답 캡처에서 확인됐다(200 SUCCESS).
+
+### 스타일 메시지 (HTML 부분집합)
+
+`content.message` 는 평문이 아니라 HTML 로 렌더된다. 단, 채팅 클라이언트가 실제로 인식하는 태그는 **부분집합**뿐이다(라이브 캡처로 확인). 그 외 태그는 그대로 노출되므로 만들지 않는다.
+
+| 태그 | 의미 |
+|---|---|
+| `<b>…</b>` | 볼드 |
+| `<i>…</i>` | 이탤릭 |
+| `<ol><li>…</li>…</ol>` | 번호 목록 |
+| `<ul><li>…</li>…</ul>` | 블릿 목록 |
+| `<br>` | 줄바꿈 |
+
+```json
+{
+  "chatRoomId": "1505835441897709568",
+  "cmid": "a6ee32d1-93f6-412c-8e1d-6515dee26171",
+  "content": {"message": "<b>제목</b><br><ol><li>첫째</li><li>둘째</li></ol>", "parentChatMessageId": "1505833539940147200"}
+}
+```
+
+SDK 는 마크다운을 이 부분집합으로 변환하는 `to_chat_html()` 을 제공하고, `DaouBot(markdown=True)` 면 엔진이 핸들러 응답을 전송 전 자동 변환한다(기본 비활성 — 답은 그대로 전송). 부분집합 밖 문법(헤딩·코드·링크 등)은 태그 대신 원문 문자 그대로 degrade 한다. 사용자 텍스트는 먼저 HTML escape 되어 마크업 깨짐/주입이 불가하다.
+
 ---
 
 ## 3.2 메시지 히스토리 조회 - GET /api/chat/room/{roomId}/chat/range

@@ -113,7 +113,7 @@ async def main():
 asyncio.run(main())
 ```
 
-`on_message` 가 문자열을 반환하면 답장, `None` 이면 무응답입니다. 핸들러를 주지 않으면 봇은 메시지를 읽기만 합니다(답장 안 함). 30분 만료 시 자격증명이 있으면 자동 재로그인합니다.
+`on_message` 가 문자열을 반환하면 답장, `None` 이면 무응답입니다. 답장은 그 핸들러를 유발한 메시지에 대한 **인용 회신(threaded reply)** 으로 자동 연결되므로(다우오피스 답장 UI 와 동일), 바쁜 방에서도 무엇에 대한 답인지 분명합니다. 핸들러를 주지 않으면 봇은 메시지를 읽기만 합니다(답장 안 함). 30분 만료 시 자격증명이 있으면 자동 재로그인합니다.
 
 > 봇 계정은 누구나 아무 방에나 초대할 수 있습니다. 특정 방에서만 동작시키려면 `RoomRouter` 를 쓰세요 — 등록한 방만 처리하고 나머지는 무시합니다(allowlist). `bot = DaouBot(..., on_message=router)`. 예제: `examples/bot-router`.
 
@@ -123,7 +123,9 @@ asyncio.run(main())
 bot = DaouBot(..., on_message=only_when_mentioned(handle))
 ```
 
-**파일 첨부 (예: LLM 뉴스레터):** 채팅은 MD/HTML 을 인라인 렌더하지 않습니다. `bot.send_file(room_id, "news.md", "이번 주 뉴스레터")` 로 업로드 → 첨부로 전송(수신자 다운로드). `BotClient.upload_attachment()` + `send_message(..., attachments=[...])` 분해도 가능. 첨부 계약은 SAZ 기반이며 **라이브 미검증**입니다([docs/api/03-messages.md](docs/api/03-messages.md) §3.7).
+**마크다운 스타일 (`markdown=True`):** 채팅은 작은 HTML 부분집합만 렌더합니다 — 볼드·이탤릭·번호목록·블릿목록뿐(라이브 캡처로 확인). `DaouBot(..., markdown=True)` 면 핸들러가 반환한 마크다운을 엔진이 전송 전 자동 변환합니다(`**굵게**`/`*기울임*`/`1.`/`-`). 기본은 비활성(그대로 전송). 부분집합 밖 문법(헤딩·코드·링크)은 태그 대신 원문 그대로 degrade 하고, 텍스트는 HTML escape 되어 깨짐/주입이 없습니다. 직접 변환은 `to_chat_html(text)`. 계약·태그표는 [docs/api/03-messages.md](docs/api/03-messages.md) §3.1.
+
+**파일 첨부 (예: LLM 뉴스레터):** 긴 MD/HTML *문서*는 인라인 렌더되지 않습니다(위 부분집합 밖). `bot.send_file(room_id, "news.md", "이번 주 뉴스레터")` 로 업로드 → 첨부로 전송(수신자 다운로드). `BotClient.upload_attachment()` + `send_message(..., attachments=[...])` 분해도 가능. 첨부 계약은 SAZ 기반이며 **라이브 미검증**입니다([docs/api/03-messages.md](docs/api/03-messages.md) §3.7).
 
 **재시작 복구:** "어디까지 처리했는지"(방별 마지막 메시지 id)는 기본적으로 `~/.daoubot/cursors.json` 에 저장됩니다 — 봇이 재시작해도(어느 디렉터리에서 실행하든) 백로그를 다시 처리하거나 다운타임 메시지를 건너뛰지 않고 이어받습니다. 비영속을 원하면 `DaouBot(..., cursor_store=MemoryCursorStore())`. 단, 폴링 특성상 따라잡기는 방당 최근 ~100개 히스토리 창 안으로 제한됩니다(그보다 오래 다운되면 창 밖 메시지는 복구 불가 — "since id" 엔드포인트가 없음).
 
