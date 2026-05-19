@@ -143,8 +143,7 @@ daoubot login --config bots/a.json ... # 프로필 파일 위치 분리(멀티 �
 | `bot-assistant` | 핸들러에서 OpenAI 호환 LLM 호출 (LLM_* env 필요) |
 | `bot-router` | 방별 핸들러 분기 (등록한 방만 처리하는 allowlist) |
 | `bot-error-handler` | 핸들러 예외를 잡아 개발자 방에 알림 |
-| `bot-room-saver` | 지정 방(또는 전체)의 메시지를 JSONL로 수집(응답 안 함) |
-| `bot-archive` | 지정 방(또는 전체) 채팅을 JSONL로 아카이브(응답 안 함) |
+| `bot-room-saver` | `RoomRouter` 로 지정한 방만 JSONL로 저장(응답 안 함; 방 id는 `daoubot rooms`) |
 
 ```bash
 uv run --with python-daouoffice-bot examples/bot-echobot/bot.py
