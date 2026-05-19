@@ -2,18 +2,18 @@
 """Command bot — the common `!cmd args` pattern.
 
 DaouOffice has no slash-command framework, so commands are a text
-convention. Connection env vars are the same four shown in bot-echobot.
+convention. Connection resolves from the `daoubot login` profile / DAOU_*
+env (see bot-echobot / README).
 
     uv run --with python-daouoffice-bot examples/bot-command/bot.py
 
-Try in a room:  !help  /  !echo hello  /  !whoami
+In a room: !help / !echo hello / !whoami
 """
 
 from __future__ import annotations
 
 import asyncio
 import logging
-import os
 from collections.abc import Awaitable, Callable
 
 from daouoffice import DaouBot, NewMessage
@@ -37,18 +37,18 @@ def command(name: str, help_text: str) -> Callable[[Command], Command]:
     return deco
 
 
-@command("help", "이 도움말을 보여줍니다")
+@command("help", "show this help")
 def cmd_help(msg: NewMessage, args: str) -> str:
     lines = [f"{PREFIX}{n} — {h}" for n, (h, _) in sorted(_commands.items())]
     return "사용 가능한 명령:\n" + "\n".join(lines)
 
 
-@command("echo", "뒤의 텍스트를 그대로 돌려줍니다")
+@command("echo", "echo the rest of the message")
 def cmd_echo(msg: NewMessage, args: str) -> str:
     return args or "(빈 메시지)"
 
 
-@command("whoami", "보낸 사람 정보를 표시합니다")
+@command("whoami", "show the sender info")
 def cmd_whoami(msg: NewMessage, args: str) -> str:
     return f"{msg.sender_name} (user_id={msg.sender_user_id}, room={msg.room_id})"
 
@@ -66,13 +66,7 @@ async def on_message(msg: NewMessage) -> str | None:
 
 
 async def main() -> None:
-    bot = DaouBot(
-        base_url=os.environ["DAOU_BASE_URL"],
-        company_id=os.environ["DAOU_COMPANY_ID"],
-        login_id=os.environ["DAOU_LOGIN_ID"],
-        password=os.environ["DAOU_PASSWORD"],
-        on_message=on_message,
-    )
+    bot = DaouBot(on_message=on_message)
     await bot.run_forever()
 
 

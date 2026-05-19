@@ -58,10 +58,10 @@ def test_missing_base_url_raises() -> None:
         load_settings()
 
 
-def test_daoubot_from_env(monkeypatch) -> None:
+def test_daoubot_resolves_from_env(monkeypatch) -> None:
     monkeypatch.setenv("DAOU_BASE_URL", "https://acme.daouoffice.com")
     monkeypatch.setenv("DAOU_COMPANY_ID", "11000000000")
     monkeypatch.setenv("DAOU_LOGIN_ID", "bot")
     monkeypatch.setenv("DAOU_PASSWORD", "pw")
-    bot = DaouBot.from_env()
+    bot = DaouBot(on_message=lambda m: None)
     assert bot.client._base_url == "https://acme.daouoffice.com"

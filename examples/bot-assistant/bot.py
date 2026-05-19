@@ -1,11 +1,11 @@
 #!/usr/bin/env python
-"""AI assistant bot — shows how to plug an LLM into a handler.
+"""AI assistant bot — how to plug an LLM into a handler.
 
-The SDK bundles no LLM; this calls any OpenAI-compatible chat API inside the
-handler. Swap it for Anthropic / Ollama / your own logic.
+The SDK bundles no LLM; this calls an OpenAI-compatible chat API inside the
+handler (swap for Anthropic/Ollama/your own logic).
 
-Connection env vars: the same four shown in bot-echobot / README.
-This example's own config:
+Connection resolves from the `daoubot login` profile / DAOU_* env (see
+bot-echobot / README). This example's own config:
     LLM_BASE_URL  OpenAI-compatible base, e.g. https://gateway/v1
     LLM_API_KEY   bearer key
     LLM_MODEL     model name (optional, default gpt-4o-mini)
@@ -58,13 +58,7 @@ async def on_message(msg: NewMessage) -> str:
 
 
 async def main() -> None:
-    bot = DaouBot(
-        base_url=os.environ["DAOU_BASE_URL"],
-        company_id=os.environ["DAOU_COMPANY_ID"],
-        login_id=os.environ["DAOU_LOGIN_ID"],
-        password=os.environ["DAOU_PASSWORD"],
-        on_message=on_message,
-    )
+    bot = DaouBot(on_message=on_message)
     await bot.run_forever()
 
 

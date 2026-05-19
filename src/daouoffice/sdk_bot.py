@@ -1,9 +1,10 @@
 """DaouOffice Messenger SDK — high-level :class:`DaouBot`.
 
-Example::
+A bot is a background daemon. Onboard once with ``daoubot login`` (writes
+``.daoubot/profile.json`` — tenant, identity and a session token; never the
+password). Then the bot just runs:
 
     import asyncio
-    import os
     from daouoffice import DaouBot, NewMessage
 
     async def on_message(msg: NewMessage) -> str | None:
@@ -12,20 +13,22 @@ Example::
         return None
 
     async def main():
-        bot = DaouBot(
-            base_url=os.environ["DAOU_BASE_URL"],
-            company_id=os.environ["DAOU_COMPANY_ID"],
-            login_id=os.environ["DAOU_LOGIN_ID"],
-            password=os.environ["DAOU_PASSWORD"],
-            on_message=on_message,
-        )
+        bot = DaouBot(on_message=on_message)   # resolves from profile.json
         await bot.run_forever()
 
     asyncio.run(main())
 
+The session token lives ~30 minutes. For unattended operation set
+``DAOU_PASSWORD`` (e.g. a systemd ``EnvironmentFile``) so the bot
+re-authenticates itself indefinitely; the refreshed token is written back to
+the profile. Without a password the bot runs until the token expires and then
+stops with a clear error (the password is deliberately never stored on disk).
+
+Any connection value may be overridden by an explicit argument or a ``DAOU_*``
+environment variable (precedence: argument > env > profile).
+
 The SDK does one thing: talk to DaouOffice messenger. It deliberately does
-**not** bundle an LLM — call whatever you want inside ``on_message``. See
-``examples/bot-assistant`` for a minimal LLM integration.
+**not** bundle an LLM — call whatever you want inside ``on_message``.
 """
 
 from __future__ import annotations
@@ -36,9 +39,10 @@ import logging
 import signal
 from collections.abc import Awaitable, Callable
 
-from daouoffice.client import BotClient, NewMessage
+from daouoffice.client import BotClient, DaouAuthError, DaouConfigError, NewMessage
 from daouoffice.config import load_settings
 from daouoffice.engine import POLL_INTERVAL, BotEngine
+from daouoffice.profile import Profile, load_profile, save_profile
 from daouoffice.state import CursorStore, FileCursorStore
 
 logger = logging.getLogger(__name__)
@@ -48,41 +52,102 @@ logger = logging.getLogger(__name__)
 MessageHandler = Callable[[NewMessage], Awaitable[str | None] | str | None]
 
 
+def _build_client(
+    *,
+    base_url: str | None,
+    company_id: str | None,
+    login_id: str | None,
+    password: str | None,
+) -> BotClient:
+    """Resolve connection (arg > env > profile) and build a client.
+
+    With a password the client re-authenticates on its own (the background
+    case); the fresh token is persisted to the profile after every login.
+    Without a password it runs on the saved profile token until it expires.
+    """
+    s = load_settings(
+        base_url=base_url,
+        company_id=company_id,
+        login_id=login_id,
+        password=password,
+    )
+    prof = load_profile()
+
+    def _persist(c: BotClient) -> None:
+        if c.identity is None:
+            return
+        save_profile(
+            Profile(
+                base_url=s.base_url,
+                company_id=c.identity.company_id,
+                company_uuid=c.identity.company_uuid,
+                company_domain=c.identity.company_domain,
+                login_id=c.identity.login_id,
+                user_id=c.identity.user_id,
+                name=c.identity.name,
+                access_token=c.access_token,
+            )
+        )
+
+    if s.password:
+        return BotClient(
+            s.login_id,
+            s.password,
+            base_url=s.base_url,
+            company_id=s.company_id,
+            on_auth=_persist,
+        )
+    if prof and prof.access_token:
+        return BotClient.from_token(s.base_url, prof.access_token, on_auth=_persist)
+    raise DaouConfigError(
+        "No credentials and no saved session. Run `daoubot login` first, "
+        "or set DAOU_PASSWORD (e.g. a systemd EnvironmentFile) for "
+        "unattended operation."
+    )
+
+
 class DaouBot:
-    """High-level DaouOffice messenger bot.
+    """High-level DaouOffice messenger bot (background daemon).
+
+    All connection settings resolve from ``daoubot login``'s
+    ``.daoubot/profile.json``, overridable by an explicit argument or a
+    ``DAOU_*`` environment variable (precedence: argument > env > profile).
+    The password is never read from the profile — pass it or set
+    ``DAOU_PASSWORD`` so the bot can re-authenticate unattended.
 
     Args:
-        login_id: Bot account login id.
-        password: Bot account password.
-        base_url: Tenant URL (or env ``DAOU_BASE_URL``).
-        company_id: Tenant company id (or env ``DAOU_COMPANY_ID``).
-        on_message: The message handler — ``(NewMessage) -> str | None``
-            (sync or async). Return a string to reply, ``None`` for no reply.
-            If omitted, the bot only reads/marks messages and never replies.
-            Pass a :class:`~daouoffice.RoomRouter` here for per-room dispatch.
-        poll_interval: Seconds between poll cycles.
-        cursor_store: Where the processed-message cursor is persisted.
-            Defaults to a :class:`~daouoffice.state.FileCursorStore`
-            (``.daoubot/cursors.json``) so a restart resumes where it left
-            off. Pass :class:`~daouoffice.state.MemoryCursorStore` to opt out.
-        max_attempts: poison-message guard — give up on a message after this
-            many failed handler attempts (delivery is always at-least-once;
-            see :class:`~daouoffice.engine.BotEngine`).
+        base_url / company_id / login_id / password: connection overrides;
+            normally resolved from the profile (login_id) / env, so a bot is
+            just ``DaouBot(on_message=...)``.
+        on_message: the message handler ``(NewMessage) -> str | None`` (sync
+            or async); ``None`` reply = no reply. Omit to only read/mark.
+            Pass a :class:`~daouoffice.RoomRouter` for per-room dispatch.
+        poll_interval: seconds between poll cycles.
+        cursor_store: where the processed-message cursor is persisted; default
+            :class:`~daouoffice.state.FileCursorStore` (resume after restart).
+        max_attempts: poison-message guard (delivery is always at-least-once).
+        client: advanced/internal — use a pre-built :class:`BotClient`.
     """
 
     def __init__(
         self,
-        login_id: str,
-        password: str,
         *,
         base_url: str | None = None,
         company_id: str | None = None,
+        login_id: str | None = None,
+        password: str | None = None,
         on_message: MessageHandler | None = None,
         poll_interval: int = POLL_INTERVAL,
         cursor_store: CursorStore | None = None,
         max_attempts: int = 5,
+        client: BotClient | None = None,
     ) -> None:
-        self._client = BotClient(login_id, password, base_url=base_url, company_id=company_id)
+        self._client = client or _build_client(
+            base_url=base_url,
+            company_id=company_id,
+            login_id=login_id,
+            password=password,
+        )
         self._handler = on_message
         self._engine = BotEngine(
             self._client,
@@ -92,39 +157,9 @@ class DaouBot:
             max_attempts=max_attempts,
         )
 
-    @classmethod
-    def from_env(
-        cls,
-        *,
-        on_message: MessageHandler | None = None,
-        poll_interval: int = POLL_INTERVAL,
-        cursor_store: CursorStore | None = None,
-        max_attempts: int = 5,
-        **overrides: str,
-    ) -> DaouBot:
-        """Build a bot from env / profile (see :func:`daouoffice.load_settings`).
-
-        A terse shortcut for production/CLI use. ``overrides`` may pass any of
-        ``base_url``/``company_id``/``login_id``/``password`` explicitly;
-        everything else comes from ``DAOU_*`` env vars or
-        ``.daoubot/profile.json``. (Examples construct ``DaouBot`` explicitly
-        instead, so the required settings are visible in the code.)
-        """
-        s = load_settings(**overrides)
-        return cls(
-            s.login_id,
-            s.password,
-            base_url=s.base_url,
-            company_id=s.company_id,
-            on_message=on_message,
-            poll_interval=poll_interval,
-            cursor_store=cursor_store,
-            max_attempts=max_attempts,
-        )
-
     @property
     def client(self) -> BotClient:
-        """The underlying REST client (logged in after :meth:`start`)."""
+        """The underlying REST client (authenticated after :meth:`start`)."""
         return self._client
 
     def set_handler(self, on_message: MessageHandler | None) -> None:
@@ -132,9 +167,28 @@ class DaouBot:
         self._handler = on_message
 
     async def start(self) -> None:
-        """Log in and start the polling engine (runs until stopped)."""
-        await asyncio.to_thread(self._client.login)
+        """Authenticate and run the polling engine until stopped.
+
+        With credentials the bot logs in and thereafter re-authenticates
+        itself on token expiry (background case). Token-only (a saved
+        profile, no password) validates the token; once it expires there is
+        nothing to recover from, so it stops with a clear error directing the
+        operator to set ``DAOU_PASSWORD``.
+        """
+        if self._client._can_relogin():
+            await asyncio.to_thread(self._client.login)
+        else:
+            await asyncio.to_thread(self._resolve_identity)
         await self._engine.start()
+
+    def _resolve_identity(self) -> None:
+        try:
+            self._client.identity = self._client.whoami()
+        except Exception as e:
+            raise DaouAuthError(
+                "Saved session token is invalid or expired. Set DAOU_PASSWORD "
+                "for unattended re-authentication, or run `daoubot login`."
+            ) from e
 
     async def stop(self) -> None:
         self._engine.stop()

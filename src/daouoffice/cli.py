@@ -73,11 +73,19 @@ def _settings(args: argparse.Namespace) -> tuple[Profile | None, str, str | None
 
 
 def _authed_client(args: argparse.Namespace) -> BotClient:
-    """A logged-in client: reuse the saved token, else log in with creds."""
+    """A logged-in client: reuse the saved token, else log in with creds.
+
+    Any (re-)login persists the fresh token back to the profile via on_auth,
+    so subsequent commands reuse it instead of re-authenticating.
+    """
     prof, base_url, company_id = _settings(args)
+    cfg = _cfg(args)
+
+    def _persist(c: BotClient) -> None:
+        _store(c, base_url, cfg)
 
     if prof and prof.access_token:
-        client = BotClient.from_token(base_url, prof.access_token)
+        client = BotClient.from_token(base_url, prof.access_token, on_auth=_persist)
         try:
             client.identity = client.whoami()
             return client
@@ -88,9 +96,10 @@ def _authed_client(args: argparse.Namespace) -> BotClient:
     password = _pick(args.password, "DAOU_PASSWORD", None)
     if not (login_id and password and company_id):
         _die("session expired and no credentials — run `daoubot login` again")
-    client = BotClient(login_id, password, base_url=base_url, company_id=company_id)
+    client = BotClient(
+        login_id, password, base_url=base_url, company_id=company_id, on_auth=_persist
+    )
     client.login()
-    _store(client, base_url, _cfg(args))
     return client
 
 
@@ -210,12 +219,19 @@ def cmd_send(args: argparse.Namespace) -> None:
 
 def cmd_start(args: argparse.Namespace) -> None:
     prof, base_url, company_id = _settings(args)
+    cfg = _cfg(args)
     login_id = _pick(args.login_id, "DAOU_LOGIN_ID", prof.login_id if prof else None)
     password = _resolve_password(args)
     if not (login_id and password and company_id):
         _die("`start` needs login_id, a password (flag/env/prompt) and company_id")
-    bot = DaouBot(login_id, password, base_url=base_url, company_id=company_id)
-    asyncio.run(bot.run_forever())
+    client = BotClient(
+        login_id,
+        password,
+        base_url=base_url,
+        company_id=company_id,
+        on_auth=lambda c: _store(c, base_url, cfg),  # persist refreshed token on 401 re-login
+    )
+    asyncio.run(DaouBot(client=client).run_forever())
 
 
 def build_parser() -> argparse.ArgumentParser:

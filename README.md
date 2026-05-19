@@ -44,47 +44,40 @@ cd python-daouoffice-bot
 uv sync                 # 또는: pip install -e .
 ```
 
-## 설정
+## 온보딩: `daoubot login` → 프로필
 
-연결 정보는 코드에 하드코딩하지 않고 **환경 변수** 또는 생성자 인자로 전달합니다. (SDK는 `.env` 파일을 자동으로 읽지 않습니다 — dotenv 의존 없음. 셸에 직접 export 하거나 `source` 하세요.)
+봇은 백그라운드 데몬입니다. 처음 한 번 로그인하면 회사·사용자 정보와 세션 토큰이 `./.daoubot/profile.json` 에 저장되고(`.daoubot/` 는 gitignore), 이후 코드/명령은 그 프로필을 자동으로 사용합니다. **비밀번호는 어떤 파일에도 저장하지 않습니다.** `company_id` 를 안 주면 공개 엔드포인트로 자동 탐색합니다.
+
+```bash
+# --password 를 생략하면 숨김 프롬프트로 안전하게 입력받습니다
+# (argv·셸 히스토리에 안 남고, ! 같은 특수문자 인용 문제도 없음):
+daoubot login --base-url https://yourcompany.daouoffice.com --login-id my-bot
+# → .daoubot/profile.json 저장 (토큰은 화면에 출력하지 않음)
+```
+
+한 호스트에서 여러 봇/테넌트를 쓰려면 `--config <경로>` 로 프로필 파일을 분리합니다 — 옵션은 **서브커맨드 뒤**에 옵니다(`daoubot login --config X ...`, `daoubot rooms --config X`). 형태는 [`profile.example.json`](profile.example.json) 참고(비밀번호·토큰은 안 들어감).
+
+### 무인(백그라운드) 운영
+
+세션 토큰은 약 30분 뒤 만료됩니다. 봇이 **스스로 무한 재로그인**하려면 비밀번호가 있어야 하는데, 보안상 프로필에 저장하지 않으므로 운영 환경에서 `DAOU_PASSWORD` 를 줍니다(예: systemd `EnvironmentFile`). 그러면 토큰이 만료될 때마다 자동 재인증하고, 새 토큰을 프로필에 다시 저장합니다. 비밀번호가 없으면 토큰 만료 시점에 명확한 에러로 멈춥니다(사용자에게 재로그인을 강요하지 않으려면 `DAOU_PASSWORD` 를 제공).
+
+모든 연결값은 **명시 인자 > `DAOU_*` 환경 변수 > 프로필** 순으로 해석됩니다(비밀번호는 인자/env 만). SDK는 `.env` 파일을 자동으로 읽지 않으니, 환경 변수로 오버라이드하려면 셸에 직접 export 하거나 systemd EnvironmentFile 을 쓰세요.
 
 | 환경 변수 | 설명 |
 |---|---|
 | `DAOU_BASE_URL` | 테넌트 URL (`https://회사.daouoffice.com`) |
 | `DAOU_COMPANY_ID` | 숫자 회사 id (`daoubot discover`로 조회) |
 | `DAOU_LOGIN_ID` | 봇 계정 로그인 id |
-| `DAOU_PASSWORD` | 봇 계정 비밀번호 |
+| `DAOU_PASSWORD` | 봇 계정 비밀번호 (무인 자동 재로그인용) |
 
 > LLM은 SDK에 포함돼 있지 않습니다. `bot-assistant` 예제가 핸들러 안에서 OpenAI 호환 API를 호출하는 법을 보여줍니다 (`LLM_BASE_URL`/`LLM_API_KEY`).
 
-### 온보딩: `login` → 프로필 저장
-
-처음 한 번 `login` 하면 회사·사용자 정보와 세션 토큰이 `./.daoubot/profile.json` 에 저장되고(비밀번호는 저장 안 함, `.daoubot/` 는 gitignore), 이후 명령은 자격증명 없이 그 프로필로 동작합니다. `company_id` 를 주지 않으면 공개 엔드포인트로 자동 탐색합니다.
-
-```bash
-# --password 를 생략하면 숨김 프롬프트로 안전하게 입력받습니다(권장 —
-# argv·셸 히스토리에 비밀번호가 안 남고, ! 같은 특수문자 인용 문제도 없음):
-daoubot login --base-url https://yourcompany.daouoffice.com --login-id my-bot
-# → .daoubot/profile.json 저장 + 회사/사용자 정보 출력 (토큰은 미출력)
-```
-
-> 굳이 `--password` 로 넘기거나 `export DAOU_PASSWORD=...` 할 땐 **작은따옴표**로
-> 감싸세요(`'pw!@#'`). bash 는 큰따옴표 안에서도 `!` 를 히스토리 확장해
-> `event not found` 가 납니다. 가장 안전한 건 프롬프트입니다.
-
-설정 우선순위: **명시 인자/CLI 플래그 > 환경 변수 > 프로필 파일** (결정론적 — 충돌이 아니라 우선순위로 해소). 토큰이 만료되면 자격증명이 있을 때 자동 재로그인하고, 없으면 `daoubot login` 을 다시 안내합니다.
-
-환경 변수와 `.daoubot/profile.json` 은 키가 겹쳐 보여도 **역할이 다릅니다**: 환경 변수는 *봇을 실행*하고 *자격증명을 전달*하는 입력이며 **비밀번호는 여기에만** 있습니다. 프로필은 `daoubot` **CLI 명령**이 재로그인 없이 쓰는 세션 캐시(토큰 보관, 비밀번호 없음)일 뿐, `DaouBot` 은 프로필 토큰을 쓰지 않고 자격증명으로 (재)로그인합니다. 즉 봇 실행에 필요한 건 env(또는 인자)이고, 프로필은 CLI 편의 캐시입니다.
-
-프로필 파일의 형태는 [`profile.example.json`](profile.example.json) 참고(비밀번호·토큰은 들어가지 않음 — 나머지는 `daoubot login` 이 채움). 한 호스트에서 여러 봇/테넌트를 쓰려면 `--config <경로>` 로 프로필 파일 위치를 분리하세요 — 옵션은 **서브커맨드 뒤**에 옵니다(`daoubot login --config X ...` 가 거기 쓰고, `daoubot rooms --config X` 등 다른 명령이 거기서 읽음).
-
-예제·아래 코드는 네 개의 `DAOU_*` 를 **명시적으로 환경에서 읽어** 무엇이 필요한지 코드에 드러냅니다(시크릿 하드코딩 없음, 마법 없음). 실배포/CLI 용 단축이 필요하면 `DaouBot.from_env(...)` / `BotClient.from_env()` 가 env·프로필을 읽어 한 줄로 생성합니다(`load_settings()` 직접 조회 가능, 비밀번호는 프로필에서 절대 안 읽음).
-
 ## 빠른 시작
+
+`daoubot login` 후, 봇 코드는 연결 설정이 필요 없습니다 — 프로필에서 자동 해석됩니다:
 
 ```python
 import asyncio
-import os
 
 from daouoffice import DaouBot, NewMessage
 
@@ -94,14 +87,8 @@ async def on_message(msg: NewMessage) -> str | None:
     return None  # 응답 안 함
 
 async def main():
-    bot = DaouBot(
-        base_url=os.environ["DAOU_BASE_URL"],
-        company_id=os.environ["DAOU_COMPANY_ID"],
-        login_id=os.environ["DAOU_LOGIN_ID"],
-        password=os.environ["DAOU_PASSWORD"],
-        on_message=on_message,
-    )
-    await bot.run_forever()   # Ctrl-C / SIGTERM 시 graceful 종료
+    bot = DaouBot(on_message=on_message)   # 프로필/환경에서 자동 해석
+    await bot.run_forever()                # Ctrl-C / SIGTERM 시 graceful 종료
 
 asyncio.run(main())
 ```
@@ -207,7 +194,7 @@ npx skills add junsik/python-daouoffice-bot --skill daouoffice-bot
 | `DaouBot` | 고수준 봇 (`on_message` + 폴링 + 401 자동 재로그인) |
 | `RoomRouter` | 방별 핸들러 분기 (등록한 방만 처리, 나머지 무시) |
 | `only_when_mentioned` | 봇 멘션(`@봇`/`@전체`) 시에만 핸들러 실행 |
-| `load_settings` / `Settings` / `.from_env()` | env·프로필에서 연결설정 단일 조회 |
+| `load_settings` / `Settings` | 연결설정 해석(인자>env>프로필); `DaouBot()` 이 내부 사용 |
 | `FileCursorStore` / `MemoryCursorStore` | 처리 위치 영속/비영속 저장 |
 | `NewMessage` | 정규화된 수신 메시지 |
 | `BotIdentity` | 로그인 시 해석된 봇 자신의 신원 |

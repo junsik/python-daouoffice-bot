@@ -1,8 +1,8 @@
-# Contributing
+# 기여하기
 
-Thanks for your interest in improving `python-daouoffice-bot`.
+`python-daouoffice-bot`을 개선하려는 관심에 감사드립니다.
 
-## Development setup
+## 개발 환경 설정
 
 ```bash
 git clone https://github.com/junsik/python-daouoffice-bot
@@ -10,23 +10,23 @@ cd python-daouoffice-bot
 uv sync --extra dev
 ```
 
-## Before opening a PR
+## PR開放 전
 
 ```bash
 uv run ruff check .     # lint
-uv run pytest -q        # tests
+uv run pytest -q        # 테스트
 ```
 
-Both must pass; CI runs them on Python 3.12 and 3.13.
+두 검증이 모두 통과해야 합니다; CI는 Python 3.12 및 3.13에서 이를 실행합니다.
 
-## Guidelines
+## 가이드라인
 
-- **Never commit secrets.** No real credentials, tokens, company ids, internal hostnames, or `.saz` captures. Use placeholders. The repo is multi-tenant by design — nothing should be hard-coded to one company.
-- Keep the public API (`daouoffice.__all__`) stable; discuss breaking changes in an issue first.
-- Add or update tests for behavior changes. Network is mocked with `respx`; tests must not hit a live server.
-- This project reverse-engineers an undocumented API. If you map a new endpoint, document it under `docs/api/` with anonymized samples.
-- **Do not hard-wrap Markdown prose.** One paragraph / list item / blockquote = one line; let the renderer wrap. Keep code fences, tables, and mermaid blocks as-is.
+- **절대 시크릿을 커밋하지 마십시오.** 실제 자격 증명, 토큰, 회사 ID, 내부 호스트네임, `.saz` 캡처 파일을 포함하지 마십시오. 자리 표시자를 사용하십시오. 이 저장소는 다중 테넌트 설계로 어느 한 회사에 하드코딩된 내용은 없어야 합니다.
+- 공개 API (`daouoffice.__all__`)를 안정적으로 유지하십시오. 파괴적 변경은 먼저 이슈에서 논의하십시오.
+- 동작 변경에 대한 테스트를 추가하거나 업데이트하십시오. 네트워크는 `respx`로 mock됩니다. 테스트는 실서버에 접근해서는 안 됩니다.
+- 이 프로젝트는 문서화되지 않은 API를 역엔지니어링합니다. 새로운 엔드포인트를 매핑하면 `docs/api/` 하단에 익명화된 샘플로 문서화하십시오.
+- **Markdown 텍스트를 강제 줄바꿈하지 마십시오.** 단락/목록 항목/인용 = 한 줄; 렌더러가 줄바꿈을 처리하도록 하십시오. 코드 블록, 표, mermaid 블록은 그대로 유지하십시오.
 
-## Reporting security issues
+## 보안 이슈 보고
 
-Please open a private report rather than a public issue if a change could expose credentials or tenant data.
+변경이 자격 증명이나 테넌트 데이터를 노출할 수 있는 경우, 공개 이슈 대신 비공개 보고를 열어주십시오.

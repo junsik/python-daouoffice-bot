@@ -19,6 +19,7 @@ import logging
 import os
 import re
 import uuid
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
@@ -208,6 +209,7 @@ class BotClient:
         base_url: str | None = None,
         company_id: str | None = None,
         access_token: str = "",
+        on_auth: Callable[[BotClient], None] | None = None,
         user_agent: str = DEFAULT_USER_AGENT,
         timeout: float = 30.0,
     ) -> None:
@@ -232,6 +234,9 @@ class BotClient:
         )
         self.access_token: str = access_token
         self.identity: BotIdentity | None = None
+        # Called after every successful login() (initial or 401-triggered),
+        # so the owner can persist the refreshed token + identity.
+        self._on_auth = on_auth
 
     @classmethod
     def from_token(
@@ -239,27 +244,20 @@ class BotClient:
         base_url: str,
         access_token: str,
         *,
+        on_auth: Callable[[BotClient], None] | None = None,
         timeout: float = 30.0,
     ) -> BotClient:
         """Build a client from a previously obtained token (skips login).
 
         Validate it with :meth:`whoami`; an expired token raises on use.
+        Provide creds elsewhere (env) for the 401 path to self-recover.
         """
-        client = cls("", "", base_url=base_url, access_token=access_token, timeout=timeout)
-        return client
-
-    @classmethod
-    def from_env(cls, *, timeout: float = 30.0, **overrides: str) -> BotClient:
-        """Build a client from env / profile (see ``daouoffice.load_settings``)."""
-        # Lazy: config imports client, so a top-level import would be a cycle.
-        from daouoffice.config import load_settings  # noqa: PLC0415
-
-        s = load_settings(**overrides)
         return cls(
-            s.login_id,
-            s.password,
-            base_url=s.base_url,
-            company_id=s.company_id,
+            "",
+            "",
+            base_url=base_url,
+            access_token=access_token,
+            on_auth=on_auth,
             timeout=timeout,
         )
 
@@ -317,6 +315,8 @@ class BotClient:
             self.identity.user_id,
             self.identity.company_domain or self._company_id,
         )
+        if self._on_auth is not None:
+            self._on_auth(self)  # persist the fresh token + identity
         return self.identity
 
     def get_auth_headers(self) -> dict[str, str]:
@@ -334,9 +334,16 @@ class BotClient:
         """
         headers = {**kwargs.pop("headers", {}), **self.get_auth_headers()}
         resp = self._client.request(method, path, headers=headers, **kwargs)
-        if resp.status_code == HTTP_UNAUTHORIZED and self._can_relogin():
+        if resp.status_code == HTTP_UNAUTHORIZED:
+            if not self._can_relogin():
+                raise DaouAuthError(
+                    "Session expired (401) and no credentials to re-authenticate. "
+                    "Set DAOU_PASSWORD for unattended re-login, or run "
+                    "`daoubot login` again. (A profile token alone cannot be "
+                    "refreshed after ~30 minutes.)"
+                )
             logger.info("401 (%s) — session expired, re-authenticating", path)
-            self.login()
+            self.login()  # persists the new token via on_auth
             headers = {**headers, **self.get_auth_headers()}
             resp = self._client.request(method, path, headers=headers, **kwargs)
         return resp

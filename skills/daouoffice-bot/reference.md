@@ -6,8 +6,8 @@ Condensed, self-contained API + gotchas for building bots. (Repo docs: `docs/ARC
 
 | Symbol | Purpose |
 |---|---|
-| `DaouBot` | High-level bot. `DaouBot.from_env(on_message=...)` resolves connection from env/profile. `run_forever()` = login + poll + graceful SIGINT/SIGTERM. |
-| `BotClient` | REST wrapper: `login()`, `whoami()`, `discover_company()`, `get_rooms()`, `create_room()`, `open_room()`, `send_message(room, content="", *, attachments=[...])`, `upload_attachment(path)`, `send_file(room, path, content="")`, `get_chat_history()`, `mark_read()`. `from_env()` / `from_token()`. |
+| `DaouBot` | High-level bot. `DaouBot(on_message=...)` resolves connection from a `daoubot login` profile / `DAOU_*` env (arg > env > profile). `run_forever()` = login + poll + graceful SIGINT/SIGTERM. Set `DAOU_PASSWORD` for unattended auto re-login. |
+| `BotClient` | REST wrapper: `login()`, `whoami()`, `discover_company()`, `get_rooms()`, `create_room()`, `open_room()`, `send_message(room, content="", *, attachments=[...])`, `upload_attachment(path)`, `send_file(room, path, content="")`, `get_chat_history()`, `mark_read()`. `from_token()`. |
 | `BotEngine` | Polling engine (used internally by `DaouBot`). |
 | `NewMessage` | Inbound message (see fields below). |
 | `RoomRouter` | Per-room handler dispatch; **allowlist** — unregistered rooms ignored. `add_room(id, fn)`, `add_room_type("SINGLE"/"GROUP", fn)`, `set_default(fn)`, decorators `@router.room(id)` / `@router.room_type(t)` / `@router.default`. Pass the router as `on_message`. |
@@ -42,23 +42,18 @@ Condensed, self-contained API + gotchas for building bots. (Repo docs: `docs/ARC
 
 ```python
 import asyncio
-import os
 from daouoffice import DaouBot, NewMessage
 
 async def on_message(msg: NewMessage) -> str | None:
     return f"echo: {msg.message_text}"
 
 async def main() -> None:
-    bot = DaouBot(
-        base_url=os.environ["DAOU_BASE_URL"],
-        company_id=os.environ["DAOU_COMPANY_ID"],
-        login_id=os.environ["DAOU_LOGIN_ID"],
-        password=os.environ["DAOU_PASSWORD"],
-        on_message=on_message,
-    )
+    bot = DaouBot(on_message=on_message)   # resolves from `daoubot login` profile
     await bot.run_forever()
 
 asyncio.run(main())
 ```
 
-Explicit construction keeps the required inputs visible. `DaouBot.from_env()` is a terse shortcut (env/profile) for production/CLI when readability is not the goal.
+`DaouBot()` resolves connection from the `daoubot login` profile (or `DAOU_*`
+env / explicit args; arg > env > profile). No credentials belong in the bot
+code. For unattended runs set `DAOU_PASSWORD` so it re-authenticates itself.

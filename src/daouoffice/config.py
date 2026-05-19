@@ -5,8 +5,8 @@ come from": explicit argument > ``DAOU_*`` environment variable > saved
 ``.daoubot/profile.json``. The password is **never** read from the profile
 (it is never stored there) — only from the argument or ``DAOU_PASSWORD``.
 
-Used by :meth:`DaouBot.from_env` / :meth:`BotClient.from_env` so examples and
-apps don't reimplement env plumbing.
+Used by :class:`DaouBot` to resolve connection settings, so a bot is just
+``DaouBot(on_message=...)`` after ``daoubot login``.
 """
 
 from __future__ import annotations

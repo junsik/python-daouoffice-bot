@@ -1,9 +1,9 @@
 #!/usr/bin/env python
-"""Error-handling bot — guards the handler and reports failures.
+"""Error-handling bot — guard the handler and report failures.
 
-Connection env vars: the same four shown in bot-echobot / README.
-Optional app config:
-    DAOU_DEV_ROOM   room id to send tracebacks to (unset → only logged)
+Connection resolves from the `daoubot login` profile / DAOU_* env (see
+bot-echobot / README). Optional config:
+    DAOU_DEV_ROOM   room id to send tracebacks to (unset → log only)
 
     uv run --with python-daouoffice-bot examples/bot-error-handler/bot.py
 """
@@ -48,12 +48,7 @@ def make_handler(bot: DaouBot):
 
 
 async def main() -> None:
-    bot = DaouBot(
-        base_url=os.environ["DAOU_BASE_URL"],
-        company_id=os.environ["DAOU_COMPANY_ID"],
-        login_id=os.environ["DAOU_LOGIN_ID"],
-        password=os.environ["DAOU_PASSWORD"],
-    )
+    bot = DaouBot()
     bot.set_handler(make_handler(bot))
     await bot.run_forever()
 
