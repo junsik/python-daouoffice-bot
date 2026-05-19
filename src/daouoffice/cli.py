@@ -78,6 +78,16 @@ def _resolve_password(args: argparse.Namespace, profile_pw: str | None = None) -
     return None
 
 
+def _resolve_login_id(args: argparse.Namespace) -> str | None:
+    """Login id: --login-id > DAOU_LOGIN_ID > visible prompt (TTY only)."""
+    lid = _pick(args.login_id, "DAOU_LOGIN_ID", None)
+    if lid:
+        return lid
+    if sys.stdin.isatty():
+        return input("DaouOffice login id: ").strip() or None
+    return None
+
+
 def _cfg(args: argparse.Namespace) -> str | None:
     """The --config profile path, if given."""
     return getattr(args, "config", None)
@@ -156,10 +166,15 @@ def cmd_login(args: argparse.Namespace) -> None:
     base_url = _pick(args.base_url, "DAOU_BASE_URL", None)
     if not base_url:
         _die("--base-url (or DAOU_BASE_URL) is required for login")
-    login_id = _pick(args.login_id, "DAOU_LOGIN_ID", None)
+    # Ask for the missing required values in a natural order — login id
+    # first, then the password — instead of prompting for the password and
+    # only then failing because the login id was never given.
+    login_id = _resolve_login_id(args)
+    if not login_id:
+        _die("--login-id (or DAOU_LOGIN_ID, or run interactively) is required for login")
     password = _resolve_password(args)
-    if not (login_id and password):
-        _die("--login-id and a password (flag/env/prompt) are required for login")
+    if not password:
+        _die("a password (--password / DAOU_PASSWORD / prompt) is required for login")
 
     company_id = _pick(args.company_id, "DAOU_COMPANY_ID", None)
     if not company_id:

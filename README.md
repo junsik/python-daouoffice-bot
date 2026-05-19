@@ -49,9 +49,10 @@ uv sync                 # 또는: pip install -e .
 봇은 백그라운드 데몬입니다. 처음 한 번 로그인하면 회사·사용자 정보, 세션 토큰, **비밀번호**가 `~/.daoubot/profile.json`(홈 디렉터리, 실행 위치 무관 — `~/.aws`/`~/.docker` 와 같은 방식)에 저장되고, 이후 코드/명령은 어느 디렉터리에서 실행하든 그 프로필을 자동으로 씁니다. 데몬이 무인 자동 재로그인하려면 비밀번호가 필요하므로 저장하는 것이며 — 파일은 `chmod 600`·`.daoubot/` gitignore, 화면 출력 시에는 항상 `****` 로 마스킹합니다. `company_id` 를 안 주면 공개 엔드포인트로 자동 탐색합니다.
 
 ```bash
-# --password 를 생략하면 숨김 프롬프트로 안전하게 입력받습니다
-# (argv·셸 히스토리에 안 남고, ! 같은 특수문자 인용 문제도 없음):
-daoubot login --base-url https://yourcompany.daouoffice.com --login-id my-bot
+# --login-id 를 생략하면 로그인 id 를, --password 를 생략하면 비밀번호를
+# (이 순서로) 프롬프트로 입력받습니다 — 비밀번호는 숨김 입력이라 argv·셸
+# 히스토리에 안 남고, ! 같은 특수문자 인용 문제도 없습니다:
+daoubot login --base-url https://yourcompany.daouoffice.com
 # → ~/.daoubot/profile.json 저장 (토큰·비밀번호는 화면엔 **** 로만 표시)
 ```
 

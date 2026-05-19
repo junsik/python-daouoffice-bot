@@ -258,3 +258,34 @@ def test_resolve_password_flag_env_prompt(monkeypatch) -> None:
     # non-TTY, nothing provided → None (caller errors clearly)
     monkeypatch.setattr(cli.sys.stdin, "isatty", lambda: False)
     assert cli._resolve_password(argparse.Namespace(password=None)) is None
+
+
+def test_resolve_login_id_flag_env_prompt(monkeypatch) -> None:
+    monkeypatch.delenv("DAOU_LOGIN_ID", raising=False)
+    assert cli._resolve_login_id(argparse.Namespace(login_id="bot")) == "bot"
+
+    monkeypatch.setenv("DAOU_LOGIN_ID", "envbot")
+    assert cli._resolve_login_id(argparse.Namespace(login_id=None)) == "envbot"
+
+    monkeypatch.delenv("DAOU_LOGIN_ID", raising=False)
+    monkeypatch.setattr(cli.sys.stdin, "isatty", lambda: True)
+    monkeypatch.setattr("builtins.input", lambda _prompt="": "  typed-bot  ")
+    assert cli._resolve_login_id(argparse.Namespace(login_id=None)) == "typed-bot"
+
+    monkeypatch.setattr(cli.sys.stdin, "isatty", lambda: False)
+    assert cli._resolve_login_id(argparse.Namespace(login_id=None)) is None
+
+
+def test_login_missing_login_id_errors_before_password_prompt(monkeypatch) -> None:
+    # `daoubot login --base-url X` (no login id): must fail clearly on the
+    # missing login id, NOT prompt for a password first.
+    for k in ("DAOU_LOGIN_ID", "DAOU_PASSWORD", "DAOU_COMPANY_ID"):
+        monkeypatch.delenv(k, raising=False)
+    monkeypatch.setattr(cli.sys.stdin, "isatty", lambda: False)
+
+    def _no_password(*_a, **_k):
+        raise AssertionError("password prompted before login id was resolved")
+
+    monkeypatch.setattr(cli.getpass, "getpass", _no_password)
+    with pytest.raises(SystemExit):
+        cli_main(["login", "--base-url", BASE])
