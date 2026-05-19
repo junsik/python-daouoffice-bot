@@ -35,7 +35,7 @@ def load_settings(
     use_profile: bool = True,
     config_path: str | None = None,
 ) -> Settings:
-    """Resolve connection settings (arg > env > profile; password: arg > env).
+    """Resolve connection settings (arg > env > profile, for all incl. password).
 
     ``config_path`` points at an explicit profile file (the CLI ``--config``);
     otherwise the default ``.daoubot/profile.json`` is used.
@@ -52,7 +52,7 @@ def load_settings(
         base_url=pick(base_url, "DAOU_BASE_URL", prof.base_url if prof else ""),
         company_id=pick(company_id, "DAOU_COMPANY_ID", prof.company_id if prof else ""),
         login_id=pick(login_id, "DAOU_LOGIN_ID", prof.login_id if prof else ""),
-        password=password or os.getenv("DAOU_PASSWORD", ""),
+        password=pick(password, "DAOU_PASSWORD", prof.password if prof else ""),
     )
     if not resolved.base_url:
         raise DaouConfigError(

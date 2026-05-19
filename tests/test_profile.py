@@ -40,10 +40,12 @@ def test_explicit_path_overrides_default(tmp_path) -> None:
     assert load_profile(base_dir=tmp_path) is None
 
 
-def test_public_dict_hides_token() -> None:
-    p = Profile(base_url=BASE, access_token="secret")
-    assert "access_token" not in p.public_dict()
-    assert p.public_dict()["base_url"] == BASE
+def test_public_dict_masks_secrets() -> None:
+    p = Profile(base_url=BASE, access_token="tok-secret", password="pw-secret")
+    d = p.public_dict()
+    assert d["base_url"] == BASE
+    assert d["access_token"] == "****" and d["password"] == "****"
+    assert "tok-secret" not in d.values() and "pw-secret" not in d.values()
 
 
 def test_load_ignores_unknown_keys(tmp_path) -> None:
@@ -96,8 +98,11 @@ def test_cli_login_writes_profile(tmp_path, monkeypatch, capsys) -> None:
     prof = load_profile(base_dir=tmp_path)
     assert prof is not None
     assert prof.user_id == "42" and prof.access_token == "tok123"
-    # token must not be echoed to stdout
-    assert "tok123" not in capsys.readouterr().out
+    # password is persisted so the bot can re-authenticate unattended
+    assert prof.password == "pw"
+    # but neither secret is echoed to stdout (masked as ****)
+    out = capsys.readouterr().out
+    assert "tok123" not in out and "pw" not in out and "****" in out
 
 
 @respx.mock
@@ -152,6 +157,50 @@ def test_cli_rooms_reuses_saved_token(tmp_path, monkeypatch) -> None:
     )
     cli_main(["rooms"])
     assert rooms.called  # used the saved token, no re-login
+
+
+@respx.mock
+def test_cli_auto_relogins_from_saved_password(tmp_path, monkeypatch) -> None:
+    monkeypatch.chdir(tmp_path)
+    save_profile(
+        Profile(
+            base_url=BASE,
+            company_id="11000",
+            login_id="acme-bot",
+            access_token="expired",
+            password="pw",
+        ),
+        base_dir=tmp_path,
+    )
+    # The saved token is dead → whoami 401.
+    respx.post("/api/portal/graphql").mock(
+        side_effect=[
+            httpx.Response(401, json={"code": "ROUTE-0004"}),
+            httpx.Response(200, json={"data": {"me": {"id": 1, "loginId": "acme-bot"}}}),
+        ]
+    )
+    login = respx.post("/api/portal/public/auth/login").mock(
+        return_value=httpx.Response(
+            200,
+            json={"code": "SUCCESS-0000"},
+            headers={"set-cookie": "AccessToken=fresh; Path=/"},
+        )
+    )
+    rooms = respx.get("/api/chat/room").mock(
+        return_value=httpx.Response(200, json={"data": {"elements": []}})
+    )
+
+    def _no_prompt(*_a, **_k):  # must NOT prompt — password is saved
+        raise AssertionError("getpass called; should auto-relogin from profile")
+
+    monkeypatch.setattr(cli.getpass, "getpass", _no_prompt)
+
+    cli_main(["rooms"])
+
+    assert login.called and rooms.called
+    # the refreshed token is written back, keeping the password
+    prof = load_profile(base_dir=tmp_path)
+    assert prof.access_token == "fresh" and prof.password == "pw"
 
 
 def test_cli_rooms_without_profile_errors(tmp_path, monkeypatch) -> None:

@@ -28,12 +28,20 @@ class Profile:
     user_id: str = ""
     name: str = ""
     access_token: str = ""
+    password: str = ""
     saved_at: str = ""
 
     def public_dict(self) -> dict:
-        """Profile without the session token (safe to print/log)."""
+        """Profile with secrets masked as ``****`` (safe to print/log).
+
+        The real ``password``/``access_token`` are kept in the on-disk file
+        (chmod 600, gitignored) so the bot can re-authenticate unattended;
+        only this stdout view masks them.
+        """
         d = asdict(self)
-        d.pop("access_token", None)
+        for secret in ("access_token", "password"):
+            if d.get(secret):
+                d[secret] = "****"
         return d
 
 

@@ -43,13 +43,15 @@ def _die(msg: str, code: int = 2) -> None:
     raise SystemExit(code)
 
 
-def _resolve_password(args: argparse.Namespace) -> str | None:
-    """Password: --password > DAOU_PASSWORD > hidden prompt (if a TTY).
+def _resolve_password(args: argparse.Namespace, profile_pw: str | None = None) -> str | None:
+    """Password: --password > DAOU_PASSWORD > saved profile > hidden prompt.
 
-    Prompting avoids putting the secret in argv (visible in `ps` / shell
-    history) and sidesteps shell quoting of special chars like ``!``.
+    The profile (chmod 600, gitignored) keeps the password so commands
+    re-authenticate unattended when the token expires. Prompting (TTY) is the
+    last resort — it keeps the secret out of argv (`ps` / shell history) and
+    sidesteps shell quoting of special chars like ``!``.
     """
-    pw = _pick(args.password, "DAOU_PASSWORD", None)
+    pw = _pick(args.password, "DAOU_PASSWORD", profile_pw)
     if pw:
         return pw
     if sys.stdin.isatty():
@@ -93,9 +95,14 @@ def _authed_client(args: argparse.Namespace) -> BotClient:
             print("saved session expired — re-authenticating...", file=sys.stderr)
 
     login_id = _pick(args.login_id, "DAOU_LOGIN_ID", prof.login_id if prof else None)
-    password = _pick(args.password, "DAOU_PASSWORD", None)
-    if not (login_id and password and company_id):
-        _die("session expired and no credentials — run `daoubot login` again")
+    password = _resolve_password(args, prof.password if prof else None)
+    if not (login_id and company_id):
+        _die("no profile found — run `daoubot login` first")
+    if not password:
+        _die(
+            "session expired; password required to re-authenticate "
+            "(set DAOU_PASSWORD or run interactively)"
+        )
     client = BotClient(
         login_id, password, base_url=base_url, company_id=company_id, on_auth=_persist
     )
@@ -117,6 +124,7 @@ def _store(client: BotClient, base_url: str, config_path: str | None = None) -> 
             user_id=ident.user_id,
             name=ident.name,
             access_token=client.access_token,
+            password=client._password,
         ),
         path=config_path,
     )
@@ -221,9 +229,9 @@ def cmd_start(args: argparse.Namespace) -> None:
     prof, base_url, company_id = _settings(args)
     cfg = _cfg(args)
     login_id = _pick(args.login_id, "DAOU_LOGIN_ID", prof.login_id if prof else None)
-    password = _resolve_password(args)
+    password = _resolve_password(args, prof.password if prof else None)
     if not (login_id and password and company_id):
-        _die("`start` needs login_id, a password (flag/env/prompt) and company_id")
+        _die("`start` needs login_id, a password (flag/env/profile) and company_id")
     client = BotClient(
         login_id,
         password,

@@ -46,22 +46,22 @@ uv sync                 # 또는: pip install -e .
 
 ## 온보딩: `daoubot login` → 프로필
 
-봇은 백그라운드 데몬입니다. 처음 한 번 로그인하면 회사·사용자 정보와 세션 토큰이 `./.daoubot/profile.json` 에 저장되고(`.daoubot/` 는 gitignore), 이후 코드/명령은 그 프로필을 자동으로 사용합니다. **비밀번호는 어떤 파일에도 저장하지 않습니다.** `company_id` 를 안 주면 공개 엔드포인트로 자동 탐색합니다.
+봇은 백그라운드 데몬입니다. 처음 한 번 로그인하면 회사·사용자 정보, 세션 토큰, **비밀번호**가 `./.daoubot/profile.json` 에 저장되고, 이후 코드/명령은 그 프로필을 자동으로 씁니다. 데몬이 무인 자동 재로그인하려면 비밀번호가 필요하므로 저장하는 것이며 — 파일은 `chmod 600`·`.daoubot/` gitignore, 화면 출력 시에는 항상 `****` 로 마스킹합니다. `company_id` 를 안 주면 공개 엔드포인트로 자동 탐색합니다.
 
 ```bash
 # --password 를 생략하면 숨김 프롬프트로 안전하게 입력받습니다
 # (argv·셸 히스토리에 안 남고, ! 같은 특수문자 인용 문제도 없음):
 daoubot login --base-url https://yourcompany.daouoffice.com --login-id my-bot
-# → .daoubot/profile.json 저장 (토큰은 화면에 출력하지 않음)
+# → .daoubot/profile.json 저장 (토큰·비밀번호는 화면엔 **** 로만 표시)
 ```
 
-한 호스트에서 여러 봇/테넌트를 쓰려면 `--config <경로>` 로 프로필 파일을 분리합니다 — 옵션은 **서브커맨드 뒤**에 옵니다(`daoubot login --config X ...`, `daoubot rooms --config X`). 형태는 [`profile.example.json`](profile.example.json) 참고(비밀번호·토큰은 안 들어감).
+한 호스트에서 여러 봇/테넌트를 쓰려면 `--config <경로>` 로 프로필 파일을 분리합니다 — 옵션은 **서브커맨드 뒤**에 옵니다(`daoubot login --config X ...`, `daoubot rooms --config X`). 형태는 [`profile.example.json`](profile.example.json) 참고(실제 시크릿은 안 들어간 빈 템플릿).
 
 ### 무인(백그라운드) 운영
 
-세션 토큰은 약 30분 뒤 만료됩니다. 봇이 **스스로 무한 재로그인**하려면 비밀번호가 있어야 하는데, 보안상 프로필에 저장하지 않으므로 운영 환경에서 `DAOU_PASSWORD` 를 줍니다(예: systemd `EnvironmentFile`). 그러면 토큰이 만료될 때마다 자동 재인증하고, 새 토큰을 프로필에 다시 저장합니다. 비밀번호가 없으면 토큰 만료 시점에 명확한 에러로 멈춥니다(사용자에게 재로그인을 강요하지 않으려면 `DAOU_PASSWORD` 를 제공).
+세션 토큰은 약 30분 뒤 만료됩니다. `daoubot login` 한 번이면 비밀번호가 프로필에 저장되므로, 봇/CLI 는 토큰 만료마다 **스스로 무한 재로그인**하고 새 토큰을 프로필에 다시 씁니다 — 추가 설정 없이 무인 운영됩니다. (원하면 `DAOU_PASSWORD` 환경 변수로 오버라이드 가능, 예: systemd `EnvironmentFile`.) 비밀번호가 전혀 없을 때만 토큰 만료 시 명확한 에러로 멈춥니다(사용자에게 재로그인을 강요하지 않음).
 
-모든 연결값은 **명시 인자 > `DAOU_*` 환경 변수 > 프로필** 순으로 해석됩니다(비밀번호는 인자/env 만). SDK는 `.env` 파일을 자동으로 읽지 않으니, 환경 변수로 오버라이드하려면 셸에 직접 export 하거나 systemd EnvironmentFile 을 쓰세요.
+모든 연결값(비밀번호 포함)은 **명시 인자 > `DAOU_*` 환경 변수 > 프로필** 순으로 해석됩니다. SDK는 `.env` 파일을 자동으로 읽지 않으니, 환경 변수로 오버라이드하려면 셸에 직접 export 하거나 systemd EnvironmentFile 을 쓰세요.
 
 | 환경 변수 | 설명 |
 |---|---|
@@ -214,7 +214,7 @@ skills/daouoffice-bot/  배포용 에이전트 스킬 (SKILL.md + reference.md +
 docs/                   ARCHITECTURE.md (설계 근거) + api/ (역분석 엔드포인트 레퍼런스)
 tools/                  SAZ 캡처 분석 스크립트 (개발용)
 tests/                  pytest (네트워크는 respx로 목)
-profile.example.json    프로필 파일 형태 예시 (비밀번호·토큰 없음)
+profile.example.json    프로필 파일 형태 예시 (시크릿 필드는 빈 값)
 ```
 
 ## 개발

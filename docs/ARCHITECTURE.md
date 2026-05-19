@@ -133,10 +133,10 @@ flowchart TD
 
 | 파일 | 작성 주체 | 내용 | 비밀? |
 |---|---|---|---|
-| `profile.json` | `daoubot login` | 테넌트 + 신원 + 세션 토큰 | 토큰 예 (비밀번호 없음) |
+| `profile.json` | `daoubot login` | 테넌트 + 신원 + 세션 토큰 + 비밀번호 | 예 (토큰·비밀번호) |
 | `cursors.json` | 엔진(`FileCursorStore`) | `room_id → 마지막 처리 id` | 아니오 |
 
-비밀번호는 어떤 파일에도 저장하지 않는다(env/인자/숨김 프롬프트만). `--config` 로 프로필 파일 경로를 분리해 한 호스트에서 여러 봇/테넌트를 운용한다.
+비밀번호는 무인 자동 재로그인을 위해 `profile.json` 에 저장된다 — 파일은 `chmod 600`·`.daoubot/` gitignore 이고, 화면에는 `Profile.public_dict()` 가 `****` 로 마스킹한다(`daoubot login` 출력 등). `--config` 로 프로필 경로를 분리해 한 호스트에서 여러 봇/테넌트를 운용한다.
 
 ## 7. 주요 설계 결정
 

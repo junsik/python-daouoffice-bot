@@ -86,6 +86,7 @@ def _build_client(
                 user_id=c.identity.user_id,
                 name=c.identity.name,
                 access_token=c.access_token,
+                password=c._password or (prof.password if prof else ""),
             )
         )
 
