@@ -42,11 +42,31 @@ def test_html_is_escaped_no_injection() -> None:
     assert to_chat_html("a < b & <script>") == "a &lt; b &amp; &lt;script&gt;"
 
 
+def test_link_renders_anchor() -> None:
+    assert to_chat_html("see [docs](https://e.com/a)") == 'see <a href="https://e.com/a">docs</a>'
+
+
+def test_link_in_list_item_and_with_inline_style() -> None:
+    assert (
+        to_chat_html("- **see** [d](http://e.com)")
+        == '<ul><li><b>see</b> <a href="http://e.com">d</a></li></ul>'
+    )
+
+
+def test_link_url_is_escaped_no_attribute_or_html_injection() -> None:
+    # & and < are HTML-escaped; " is escaped so it can't close href.
+    out = to_chat_html('[x](http://e.com/?a=1&b=2"><script>)')
+    assert out == '<a href="http://e.com/?a=1&amp;b=2&quot;&gt;&lt;script&gt;">x</a>'
+
+
+def test_underscore_or_star_in_url_not_mangled() -> None:
+    assert to_chat_html("[r](https://e.com/a_b/c*d)") == '<a href="https://e.com/a_b/c*d">r</a>'
+
+
 def test_unsupported_markdown_degrades_to_literal_text() -> None:
-    # No chat equivalent for headings/links → keep the literal characters
+    # Still no chat equivalent for headings → keep the literal characters
     # rather than emit a tag the client would show raw.
     assert to_chat_html("# Title") == "# Title"
-    assert to_chat_html("[x](http://e.com)") == "[x](http://e.com)"
 
 
 def test_leading_and_trailing_blank_lines_trimmed() -> None:

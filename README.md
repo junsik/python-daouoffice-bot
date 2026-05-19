@@ -124,7 +124,7 @@ asyncio.run(main())
 bot = DaouBot(..., on_message=only_when_mentioned(handle))
 ```
 
-**마크다운 스타일 (`markdown=True`):** 채팅은 작은 HTML 부분집합만 렌더합니다 — 볼드·이탤릭·번호목록·블릿목록뿐(라이브 캡처로 확인). `DaouBot(..., markdown=True)` 면 핸들러가 반환한 마크다운을 엔진이 전송 전 자동 변환합니다(`**굵게**`/`*기울임*`/`1.`/`-`). 기본은 비활성(그대로 전송). 부분집합 밖 문법(헤딩·코드·링크)은 태그 대신 원문 그대로 degrade 하고, 텍스트는 HTML escape 되어 깨짐/주입이 없습니다. 직접 변환은 `to_chat_html(text)`. 계약·태그표는 [docs/api/03-messages.md](docs/api/03-messages.md) §3.1.
+**마크다운 스타일 (`markdown=True`):** 채팅은 작은 HTML 부분집합만 렌더합니다 — 볼드·이탤릭·링크·번호목록·블릿목록(라이브 캡처로 확인). `DaouBot(..., markdown=True)` 면 핸들러가 반환한 마크다운을 엔진이 전송 전 자동 변환합니다(`**굵게**`/`*기울임*`/`[텍스트](url)`/`1.`/`-`). 기본은 비활성(그대로 전송). 부분집합 밖 문법(헤딩·코드)은 태그 대신 원문 그대로 degrade 하고, 텍스트는 HTML escape, 링크 href 는 `"` 까지 escape 되어 깨짐/주입이 없습니다. 직접 변환은 `to_chat_html(text)`. 계약·태그표는 [docs/api/03-messages.md](docs/api/03-messages.md) §3.1.
 
 **파일 첨부 (예: LLM 뉴스레터):** 긴 MD/HTML *문서*는 인라인 렌더되지 않습니다(위 부분집합 밖). `bot.send_file(room_id, "news.md", "이번 주 뉴스레터")` 로 업로드 → 첨부로 전송(수신자 다운로드). `BotClient.upload_attachment()` + `send_message(..., attachments=[...])` 분해도 가능. 첨부 계약은 SAZ 기반이며 **라이브 미검증**입니다([docs/api/03-messages.md](docs/api/03-messages.md) §3.7).
 
