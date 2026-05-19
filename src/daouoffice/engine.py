@@ -1,8 +1,10 @@
 """DaouOffice Messenger Bot — REST polling engine.
 
 This is the single polling implementation used by :class:`daouoffice.DaouBot`.
-It periodically lists rooms and, per room with unread messages, dispatches only
-messages newer than the last one it has handled (tracked by ``chatMessageId``).
+It periodically lists rooms and, for any room whose newest message id is past
+the per-room cursor, dispatches only messages newer than the last one it has
+handled (tracked by ``chatMessageId``). The cursor — not the unread badge,
+which the bot itself clears via ``mark_read`` — decides what is pending.
 
 On first contact with a room the existing backlog is **not** replayed — a
 baseline is set so the bot only reacts to messages that arrive while it is
@@ -97,7 +99,18 @@ class BotEngine:
     async def _poll_once(self) -> None:
         rooms = await asyncio.to_thread(self._client.get_rooms)
         for room in rooms:
-            if room.unreadMessageCount > 0:
+            cursor = self._cursors.get(room.roomId)
+            # Source of truth is the cursor vs. the room's newest message id,
+            # NOT the unread badge — the bot clears that badge via mark_read,
+            # so a burst arriving between fetch and ack would otherwise be
+            # marked read and never polled again (stranded). The badge is
+            # only used for first contact (no cursor yet → set a baseline).
+            if cursor is None:
+                if room.unreadMessageCount > 0:
+                    await self._handle_room(room.roomId, room.roomType)
+                continue
+            latest = room.latest_message_id
+            if (latest is not None and latest > cursor) or room.unreadMessageCount > 0:
                 await self._handle_room(room.roomId, room.roomType)
 
     @staticmethod
@@ -109,7 +122,10 @@ class BotEngine:
 
     async def _handle_room(self, room_id: str, room_type: str) -> None:
         try:
-            history = await asyncio.to_thread(self._client.get_chat_history, room_id, offset=20)
+            # Wide window: a burst between two polls must not fall out of the
+            # fetched range before the cursor catches up (messageId=0 always
+            # returns the newest N, so N must cover an interval's worth).
+            history = await asyncio.to_thread(self._client.get_chat_history, room_id, offset=100)
         except Exception:
             logger.exception("Failed to fetch history for %s", room_id)
             return

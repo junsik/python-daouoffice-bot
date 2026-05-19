@@ -151,6 +151,52 @@ async def test_at_least_once_poison_message_is_skipped() -> None:
 
 
 @pytest.mark.asyncio
+async def test_burst_not_stranded_after_badge_cleared() -> None:
+    # Regression: a rapid burst arriving between get_chat_history and
+    # mark_read gets its unread badge cleared by the bot's own mark_read.
+    # The engine must still drain it — gating on the cursor vs. the room's
+    # latest message id, not on the (self-cleared) unread badge.
+    class BadgeRaceClient(FakeClient):
+        def get_rooms(self):
+            latest = self.history[-1].chatMessageId if self.history else 0
+            # unread=0: the bot already "read" the room; only latestMessage
+            # reveals there is still something past the cursor.
+            return [
+                ChatRoomItem(
+                    roomId="r1",
+                    roomType="GROUP",
+                    unreadMessageCount=0,
+                    latestMessage={"chatMessageId": latest},
+                )
+            ]
+
+    client = BadgeRaceClient([_msg("USER", "1", 1)])
+    # Establish a baseline at id 1 (first contact uses the unread path).
+    client.get_rooms = lambda: [  # type: ignore[method-assign]
+        ChatRoomItem(roomId="r1", roomType="GROUP", unreadMessageCount=1)
+    ]
+    engine = BotEngine(client, _echo)
+    await engine._poll_once()
+    assert client.sent == []  # baseline only
+
+    # Restore the badge-cleared room view and deliver a burst (2,3,4,5).
+    del client.get_rooms
+    client.history = [_msg("USER", str(n), n) for n in (1, 2, 3, 4, 5)]
+    await engine._poll_once()
+
+    # All four are dispatched in order despite unreadMessageCount == 0.
+    assert client.sent == [
+        ("r1", "re: 2"),
+        ("r1", "re: 3"),
+        ("r1", "re: 4"),
+        ("r1", "re: 5"),
+    ]
+
+    await engine._poll_once()  # caught up → nothing repeats
+    assert len(client.sent) == 4
+
+
+@pytest.mark.asyncio
 async def test_handler_swallowing_errors_is_the_fire_and_forget_escape_hatch() -> None:
     # Delivery is always at-least-once; "fire-and-forget" is expressed by a
     # handler that never raises (so it never counts as failed / retried).

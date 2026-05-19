@@ -86,6 +86,19 @@ class ChatRoomItem(BaseModel):
     unreadMessageCount: int = 0
     roomPinFlag: bool = False
     backgroundColor: str | None = None
+    latestMessage: dict | None = None
+
+    @property
+    def latest_message_id(self) -> int | None:
+        """The room's newest message id, independent of the unread badge.
+
+        The badge is cleared by ``mark_read`` (which the bot itself calls),
+        so it cannot tell whether the cursor is caught up; this can.
+        """
+        try:
+            return int((self.latestMessage or {}).get("chatMessageId"))
+        except (TypeError, ValueError):
+            return None
 
 
 class ChatHistoryItem(BaseModel):
