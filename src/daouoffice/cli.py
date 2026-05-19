@@ -25,6 +25,7 @@ import getpass
 import json
 import os
 import sys
+import unicodedata
 
 import httpx
 
@@ -36,6 +37,24 @@ from daouoffice.profile import Profile, load_profile, profile_path, save_profile
 def _pick(flag: str | None, env: str, prof: str | None) -> str | None:
     """Resolve a setting: CLI flag > environment variable > profile."""
     return flag or os.getenv(env) or (prof or None)
+
+
+def _fit(s: str, width: int) -> str:
+    """Truncate/pad ``s`` to ``width`` *display* columns.
+
+    CJK glyphs occupy two terminal columns, so plain ``str`` slicing and
+    ``:width`` formatting misalign tables that mix Korean and ASCII. Measure
+    by East Asian Width instead.
+    """
+    out: list[str] = []
+    used = 0
+    for ch in s:
+        w = 2 if unicodedata.east_asian_width(ch) in "WF" else 1
+        if used + w > width:
+            break
+        out.append(ch)
+        used += w
+    return "".join(out) + " " * (width - used)
 
 
 def _die(msg: str, code: int = 2) -> None:
@@ -184,12 +203,12 @@ def cmd_rooms(args: argparse.Namespace) -> None:
     client = _authed_client(args)
     try:
         rooms = client.get_rooms()
-        print(f"\n{'#':>3}  {'room name':24} {'type':6} {'mbr':>4} {'unread':>6}  room id")
+        print(f"\n{'#':>3}  {_fit('room name', 24)} {'type':6} {'mbr':>4} {'unread':>6}  room id")
         print("-" * 78)
         for i, r in enumerate(rooms, 1):
             rtype = {"SINGLE": "1:1", "GROUP": "group"}.get(r.roomType, r.roomType)
             print(
-                f"{i:>3}  {r.roomName[:24]:24} {rtype:6} "
+                f"{i:>3}  {_fit(r.roomName, 24)} {rtype:6} "
                 f"{r.roomMemberCount:>4} {r.unreadMessageCount:>6}  {r.roomId}"
             )
         print(f"\nTotal {len(rooms)} rooms\n")
