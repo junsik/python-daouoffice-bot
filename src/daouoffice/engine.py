@@ -10,6 +10,12 @@ On first contact with a room the existing backlog is **not** replayed — a
 baseline is set so the bot only reacts to messages that arrive while it is
 running. The bot's own messages are skipped via the identity resolved at login.
 
+Rooms are dispatched **concurrently across rooms, serial within a room**: a
+slow handler in one room no longer stalls other rooms or the poll loop. The
+at-least-once / ordered guarantees are unchanged — a room still advances its
+cursor (and ``mark_read``) only after its handler succeeds; a room with a
+handler still in flight is simply skipped until it finishes.
+
 Polling is the only delivery mechanism. A WebSocket/STOMP endpoint
 (``GET /ws/pc``) was observed in the traffic capture but its flow was never
 validated, so it is intentionally not implemented (see docs/api/04-websocket.md).
@@ -101,6 +107,14 @@ class BotEngine:
         self._cursors: CursorStore = cursors or MemoryCursorStore()
         # "room_id:mid" -> failed handler attempts
         self._attempts: dict[str, int] = {}
+        # room_id -> in-flight handler task. Rooms are handled concurrently
+        # (cross-room parallel); a room is never handled concurrently with
+        # itself (per-room serial) — a still-running room is skipped this
+        # cycle, its messages stay pending (cursor not advanced) and are
+        # picked up next cycle. This preserves the at-least-once + ordered
+        # guarantees while a slow handler in one room no longer stalls
+        # other rooms or the poll loop.
+        self._room_tasks: dict[str, asyncio.Task] = {}
 
     async def start(self) -> None:
         """Run the poll loop until :meth:`stop` is called."""
@@ -121,9 +135,32 @@ class BotEngine:
             if failures:
                 delay = min(self._poll_interval * (2 ** min(failures, 6)), 300)
             await asyncio.sleep(delay)
+        await self._drain_room_tasks()
 
     def stop(self) -> None:
         self._running = False
+
+    async def _join(self) -> None:
+        """Await the in-flight room handlers (does not schedule new work).
+
+        The poll loop never calls this — it would reintroduce the
+        head-of-line blocking this design removes. It exists for
+        deterministic stepping in tests and for callers that explicitly
+        want a quiescence barrier."""
+        tasks = [t for t in self._room_tasks.values() if not t.done()]
+        if tasks:
+            await asyncio.gather(*tasks, return_exceptions=True)
+
+    async def _drain_room_tasks(self) -> None:
+        """Cancel and await outstanding room handlers on shutdown. A
+        cancelled handler simply did not advance its cursor, so its
+        messages are redelivered on the next run (at-least-once holds)."""
+        pending = [t for t in self._room_tasks.values() if not t.done()]
+        for t in pending:
+            t.cancel()
+        if pending:
+            await asyncio.gather(*pending, return_exceptions=True)
+        self._room_tasks.clear()
 
     # -- internals ------------------------------------------------------
 
@@ -138,11 +175,33 @@ class BotEngine:
             # only used for first contact (no cursor yet → set a baseline).
             if cursor is None:
                 if room.unreadMessageCount > 0:
-                    await self._handle_room(room.roomId, room.roomType)
+                    self._schedule_room(room.roomId, room.roomType)
                 continue
             latest = room.latest_message_id
             if (latest is not None and latest > cursor) or room.unreadMessageCount > 0:
-                await self._handle_room(room.roomId, room.roomType)
+                self._schedule_room(room.roomId, room.roomType)
+
+    def _schedule_room(self, room_id: str, room_type: str) -> None:
+        """Run a room's handler concurrently with other rooms, but never
+        twice for the same room at once. If the room's previous handler is
+        still running, skip it this cycle: its messages stay pending (the
+        cursor was not advanced) and are scheduled again next poll —
+        per-room serial + at-least-once both preserved."""
+        existing = self._room_tasks.get(room_id)
+        if existing is not None and not existing.done():
+            return
+        task = asyncio.create_task(self._handle_room(room_id, room_type))
+        self._room_tasks[room_id] = task
+        task.add_done_callback(lambda t, rid=room_id: self._room_done(rid, t))
+
+    def _room_done(self, room_id: str, task: asyncio.Task) -> None:
+        if self._room_tasks.get(room_id) is task:
+            self._room_tasks.pop(room_id, None)
+        if task.cancelled():
+            return
+        exc = task.exception()
+        if exc is not None:
+            logger.error("Room %s handler crashed", room_id, exc_info=exc)
 
     @staticmethod
     def _mid(item) -> int | None:

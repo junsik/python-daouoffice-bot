@@ -9,6 +9,14 @@ from daouoffice.engine import BotEngine
 from daouoffice.state import FileCursorStore, MemoryCursorStore
 
 
+async def _poll(engine):
+    """Step the engine one cycle and await the rooms it dispatched.
+    Rooms are scheduled concurrently now (cross-room parallel); tests
+    need the quiescence barrier to assert deterministically."""
+    await engine._poll_once()
+    await engine._join()
+
+
 def test_memory_store_roundtrip() -> None:
     s = MemoryCursorStore()
     assert s.get("r1") is None
@@ -69,12 +77,12 @@ async def test_engine_resumes_after_restart(tmp_path) -> None:
 
     # Run 1: first contact → baseline at 2, nothing dispatched, cursor saved.
     engine1 = BotEngine(client, _echo, cursors=FileCursorStore(base_dir=tmp_path))
-    await engine1._poll_once()
+    await _poll(engine1)
     assert client.sent == []
 
     # "Restart": brand-new engine + store reading the same file.
     client.history = [_msg(2), _msg(3)]  # id 3 arrived during downtime
     engine2 = BotEngine(client, _echo, cursors=FileCursorStore(base_dir=tmp_path))
-    await engine2._poll_once()
+    await _poll(engine2)
     # Resumes from cursor 2 → handles only 3, does NOT replay 1/2 as backlog.
     assert client.sent == [("r1", "m3")]
