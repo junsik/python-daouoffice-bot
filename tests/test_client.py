@@ -178,6 +178,47 @@ def test_send_file_uploads_then_attaches(tmp_path) -> None:
     assert att["sender"]["companyUuid"] == "ACME-UUID"
 
 
+def test_attachment_url_built_from_attachment_id() -> None:
+    client = BotClient("acme-bot", "p", base_url=BASE, company_id="11000")
+    url = client.attachment_url({"attachmentId": 1506173980288004096})
+    assert url == f"{BASE}/api/chat/attachment/1506173980288004096/download"
+
+
+def test_attachment_url_rejects_unsendable_placeholder_id() -> None:
+    client = BotClient("acme-bot", "p", base_url=BASE, company_id="11000")
+    # -1 is the outbound placeholder, never a real inbound attachment.
+    with pytest.raises(ValueError):
+        client.attachment_url({"attachmentId": -1})
+
+
+@respx.mock
+def test_download_attachment_writes_file(tmp_path) -> None:
+    _login_routes(respx.mock)
+    respx.get("/api/chat/attachment/999/download").mock(
+        return_value=httpx.Response(
+            200,
+            content=b"# hello",
+            headers={
+                "content-disposition": "attachment; filename=\"x.md\"; "
+                "filename*=UTF-8''%EB%A9%94%EB%AA%A8.md",
+            },
+        )
+    )
+    client = BotClient("acme-bot", "p", base_url=BASE, company_id="11000")
+    client.login()
+
+    # fileName from the attachment entry wins over the header.
+    out = client.download_attachment(
+        {"attachmentId": 999, "fileName": "report.md"}, tmp_path
+    )
+    assert out == tmp_path / "report.md"
+    assert out.read_bytes() == b"# hello"
+
+    # No fileName → fall back to the RFC 5987 header (percent-decoded).
+    out2 = client.download_attachment({"attachmentId": 999}, tmp_path)
+    assert out2.name == "메모.md"
+
+
 def test_chat_history_item_tolerates_null_fields() -> None:
     # System/empty messages (e.g. member-left notices) arrive with
     # contents/sender/metadata == null; the model must not reject them.

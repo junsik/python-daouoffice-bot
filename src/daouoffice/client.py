@@ -23,7 +23,7 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
-from urllib.parse import urlparse
+from urllib.parse import unquote, urlparse
 
 import httpx
 from pydantic import BaseModel, ConfigDict, field_validator
@@ -168,6 +168,21 @@ def parse_mentions(text: str) -> tuple[str, list[str], bool]:
 
     clean = _MENTION_RE.sub(_sub, text).strip()
     return clean, user_ids, mention_all
+
+
+def _filename_from_disposition(value: str) -> str:
+    """Best-effort filename from a ``Content-Disposition`` header.
+
+    Prefers RFC 5987 ``filename*=UTF-8''...`` (percent-decoded) over the
+    plain quoted ``filename="..."``. Returns ``""`` if neither is present.
+    """
+    if not value:
+        return ""
+    ext = re.search(r"filename\*\s*=\s*[^']*''([^;]+)", value)
+    if ext:
+        return unquote(ext.group(1).strip())
+    plain = re.search(r'filename\s*=\s*"?([^";]+)"?', value)
+    return plain.group(1).strip() if plain else ""
 
 
 @dataclass(slots=True)
@@ -546,6 +561,49 @@ class BotClient:
             "sender": sender,
             "createdAt": datetime.now(UTC).isoformat(timespec="milliseconds"),
         }
+
+    def attachment_url(self, attachment: dict) -> str:
+        """Absolute download URL for an inbound chat attachment.
+
+        ``attachment`` is one entry from :attr:`NewMessage.attachments`
+        (the server's ``attachmentList``). The URL requires the bot's
+        session (the same auth :meth:`download_attachment` applies) — it is
+        a canonical reference, not an anonymously fetchable link.
+        """
+        aid = attachment.get("attachmentId")
+        if aid in (None, "", -1, "-1"):
+            raise ValueError(
+                "attachment has no usable attachmentId "
+                f"(got {aid!r}); cannot build a download URL"
+            )
+        return f"{self._base_url}/api/chat/attachment/{aid}/download"
+
+    def download_attachment(
+        self, attachment: dict, dest: str | os.PathLike[str] | None = None
+    ) -> Path:
+        """Download an inbound chat attachment to disk and return its path.
+
+        ``dest`` may be a directory (the server/known filename is appended),
+        a full file path, or ``None`` (filename in the current directory).
+        Authentication and 401 re-login are handled by :meth:`_api`.
+        """
+        aid = attachment.get("attachmentId")
+        if aid in (None, "", -1, "-1"):
+            raise ValueError(
+                f"attachment has no usable attachmentId (got {aid!r})"
+            )
+        resp = self._api("GET", f"/api/chat/attachment/{aid}/download")
+        resp.raise_for_status()
+
+        name = attachment.get("fileName") or _filename_from_disposition(
+            resp.headers.get("content-disposition", "")
+        ) or str(aid)
+        target = Path(dest) if dest is not None else Path(name)
+        if target.is_dir():
+            target = target / name
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_bytes(resp.content)
+        return target
 
     def get_chat_history(
         self, room_id: str, *, offset: int = 20, message_id: int = 0
