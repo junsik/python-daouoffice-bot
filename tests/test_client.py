@@ -142,6 +142,24 @@ def test_get_rooms_and_send() -> None:
 
 
 @respx.mock
+def test_mark_read_sends_chat_room_id_body() -> None:
+    # The {"chatRoomId": ...} body is mandatory: without it the server
+    # answers 200 but never registers the read (no receipt).
+    _login_routes(respx.mock)
+    route = respx.post("/api/chat/message/555/read").mock(
+        return_value=httpx.Response(
+            200, json={"code": "SUCCESS-0000", "data": {"readMessageId": "555"}}
+        )
+    )
+    client = BotClient("acme-bot", "p", base_url=BASE, company_id="11000")
+    client.login()
+
+    client.mark_read(555, "room-9")
+    assert route.called
+    assert json.loads(route.calls.last.request.content) == {"chatRoomId": "room-9"}
+
+
+@respx.mock
 def test_send_message_reply_to_sets_parent_chat_message_id() -> None:
     _login_routes(respx.mock)
     route = respx.post("/api/chat/message").mock(

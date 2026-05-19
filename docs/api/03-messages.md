@@ -121,15 +121,20 @@ GET /api/chat/room/1505835441897709568/chat/range?offset=20&messageId=0
 
 ## 3.3 읽음 처리 - POST /api/chat/message/{messageId}/read
 
+`{"chatRoomId": ...}` 바디가 **필수**다. 바디 없이 보내면 서버는 200 을 주지만 읽음을 등록하지 않아 발신자에게 읽음 표시가 가지 않는다(라이브 캡처로 확인). 방 단위 lastRead 갱신이라 messageId 까지의 읽음이 한 번에 처리된다.
+
 ### Request
 ```
 POST /api/chat/message/1505835490224381952/read
+Content-Type: application/json
 Cookie: AccessToken=...
+
+{"chatRoomId": "1490517195560595456"}
 ```
 
 ### Response
 ```json
-{"code":"SUCCESS-0000","message":"성공"}
+{"code":"SUCCESS-0000","message":"성공","data":{"readMessageId":"1505835490224381952"}}
 ```
 
 ---

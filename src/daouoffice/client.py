@@ -626,5 +626,15 @@ class BotClient:
             items = data.get("items") or data.get("elements") or []
         return [ChatHistoryItem(**item) for item in items]
 
-    def mark_read(self, message_id: int | str) -> None:
-        self._api("POST", f"/api/chat/message/{message_id}/read")
+    def mark_read(self, message_id: int | str, room_id: str) -> None:
+        """Mark the room read up to ``message_id``.
+
+        The ``{"chatRoomId": ...}`` body is required: without it the server
+        still answers 200 but does not register the read, so no read receipt
+        reaches the sender (capture-verified — see docs §3.3).
+        """
+        self._api(
+            "POST",
+            f"/api/chat/message/{message_id}/read",
+            json={"chatRoomId": str(room_id)},
+        )

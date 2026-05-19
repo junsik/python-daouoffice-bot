@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+import logging
+
 import pytest
 
 from daouoffice.client import ChatHistoryItem, ChatRoomItem
-from daouoffice.engine import BotEngine
+from daouoffice.engine import BotEngine, _apply_log_level
 
 
 class FakeClient:
@@ -16,6 +18,7 @@ class FakeClient:
         self.user_id = "BOT"
         self.sent: list[tuple[str, str, str | None]] = []
         self.read: list[str] = []
+        self.read_rooms: list[str] = []
 
     def get_rooms(self) -> list[ChatRoomItem]:
         return [ChatRoomItem(roomId="r1", roomType="GROUP", unreadMessageCount=1)]
@@ -27,8 +30,9 @@ class FakeClient:
         self.sent.append((room_id, content, reply_to))
         return "cmid"
 
-    def mark_read(self, message_id) -> None:
+    def mark_read(self, message_id, room_id) -> None:
         self.read.append(str(message_id))
+        self.read_rooms.append(room_id)
 
 
 def _msg(user_id: str, text: str, mid: int) -> ChatHistoryItem:
@@ -78,6 +82,7 @@ async def test_first_poll_sets_baseline_without_replay() -> None:
 
     assert client.sent == []  # backlog not replayed
     assert client.read == ["2"]  # room marked read up to latest
+    assert client.read_rooms == ["r1"]  # read is registered against the room
 
 
 @pytest.mark.asyncio
@@ -292,3 +297,40 @@ async def test_markdown_flag_renders_reply_else_verbatim() -> None:
     plain.history = [_msg("USER", "old", 1), _msg("USER", "ping", 2)]
     await engine2._poll_once()
     assert plain.sent == [("r1", "**hi** _there_", "2")]  # verbatim
+
+
+@pytest.mark.asyncio
+async def test_conversation_content_not_logged_at_info_but_is_at_debug(caplog) -> None:
+    client = FakeClient([_msg("USER", "old", 1)])
+    engine = BotEngine(client, _echo)
+    await engine._poll_once()  # baseline = 1
+
+    client.history = [_msg("USER", "old", 1), _msg("USER", "top secret body", 2)]
+    with caplog.at_level(logging.INFO, logger="daouoffice.engine"):
+        await engine._poll_once()
+    assert "top secret body" not in caplog.text  # privacy by default
+
+    client.history.append(_msg("USER", "another secret", 3))
+    with caplog.at_level(logging.DEBUG, logger="daouoffice.engine"):
+        await engine._poll_once()
+    assert "another secret" in caplog.text  # visible only when opted into DEBUG
+
+
+def test_daou_log_level_env_scopes_package_logger_and_validates(monkeypatch) -> None:
+    pkg = logging.getLogger("daouoffice")
+    prev = pkg.level
+    try:
+        monkeypatch.setenv("DAOU_LOG_LEVEL", "warning")  # case-insensitive
+        _apply_log_level()
+        assert pkg.level == logging.WARNING
+
+        pkg.setLevel(prev)
+        monkeypatch.setenv("DAOU_LOG_LEVEL", "LOUD")  # invalid → ignored
+        _apply_log_level()
+        assert pkg.level == prev
+
+        monkeypatch.delenv("DAOU_LOG_LEVEL", raising=False)  # unset → no-op
+        _apply_log_level()
+        assert pkg.level == prev
+    finally:
+        pkg.setLevel(prev)

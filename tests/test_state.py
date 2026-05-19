@@ -46,7 +46,7 @@ class _FakeClient:
         self.sent.append((room_id, content))
         return "cmid"
 
-    def mark_read(self, message_id):
+    def mark_read(self, message_id, room_id):
         pass
 
 

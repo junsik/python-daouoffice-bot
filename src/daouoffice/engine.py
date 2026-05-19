@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 from collections.abc import Awaitable, Callable
 
 from daouoffice.client import BotClient, NewMessage, parse_mentions
@@ -26,6 +27,29 @@ from daouoffice.markdown import to_chat_html
 from daouoffice.state import CursorStore, MemoryCursorStore
 
 logger = logging.getLogger(__name__)
+
+
+def _apply_log_level() -> None:
+    """Apply ``DAOU_LOG_LEVEL`` (e.g. ``DEBUG``/``WARNING``) to the
+    ``daouoffice`` package logger when set.
+
+    Scoped to this package's logger only — it never calls ``basicConfig``
+    or touches the root logger, so it cannot hijack the host app's logging
+    (a library must not). Unset → the app's own configuration stands. This
+    is opt-in env, not a hardcoded level: per-message lines are already
+    ``DEBUG`` so default ``INFO`` never logs conversation content; this
+    only lets an operator turn that detail on, or quiet the SDK further,
+    for the ``daouoffice`` namespace without editing the app.
+    """
+    raw = os.getenv("DAOU_LOG_LEVEL")
+    if not raw:
+        return
+    level = logging.getLevelName(raw.strip().upper())
+    if not isinstance(level, int):
+        logger.warning("Ignoring invalid DAOU_LOG_LEVEL=%r", raw)
+        return
+    logging.getLogger("daouoffice").setLevel(level)
+
 
 POLL_INTERVAL = 5
 
@@ -80,6 +104,7 @@ class BotEngine:
 
     async def start(self) -> None:
         """Run the poll loop until :meth:`stop` is called."""
+        _apply_log_level()
         logger.info("Starting bot engine (REST polling, interval=%ss)", self._poll_interval)
         self._running = True
         failures = 0
@@ -152,7 +177,7 @@ class BotEngine:
                 start_at,
                 len(history),
             )
-            await self._mark_read(latest)
+            await self._mark_read(latest, room_id)
             return
 
         # New messages, oldest first (ordered processing).
@@ -200,13 +225,13 @@ class BotEngine:
         # Read receipts: clear the room only when nothing is pending retry,
         # otherwise leave it unread so the failed message is polled again.
         if not blocked:
-            await self._mark_read(latest)
+            await self._mark_read(latest, room_id)
         elif handled != baseline:
-            await self._mark_read(handled)
+            await self._mark_read(handled, room_id)
 
-    async def _mark_read(self, message_id) -> None:
+    async def _mark_read(self, message_id, room_id: str) -> None:
         try:
-            await asyncio.to_thread(self._client.mark_read, message_id)
+            await asyncio.to_thread(self._client.mark_read, message_id, room_id)
         except Exception:
             logger.exception("mark_read failed for %s", message_id)
 
@@ -238,7 +263,9 @@ class BotEngine:
 
     async def _dispatch(self, msg: NewMessage) -> bool:
         """Run the handler and send any reply. Returns True on success."""
-        logger.info("[%s] %s: %s", msg.room_id, msg.sender_name, msg.message_text[:80])
+        # DEBUG, not INFO: this carries the sender and message content, so
+        # at the default level the bot must not log conversations.
+        logger.debug("[%s] %s: %s", msg.room_id, msg.sender_name, msg.message_text[:80])
         try:
             reply = await self._on_message(msg)
             if reply:
@@ -254,7 +281,7 @@ class BotEngine:
                     reply,
                     reply_to=msg.message_id,
                 )
-                logger.info("Replied to [%s] (re: %s)", msg.room_id, msg.message_id)
+                logger.debug("Replied to [%s] (re: %s)", msg.room_id, msg.message_id)
             return True
         except Exception:
             logger.exception("Handler failed for [%s]", msg.room_id)

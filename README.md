@@ -89,8 +89,9 @@ daoubot login --base-url https://yourcompany.daouoffice.com
 | `DAOU_COMPANY_ID` | 숫자 회사 id — 생략 시 `daoubot login` 이 공개 엔드포인트로 자동 탐색 |
 | `DAOU_LOGIN_ID` | 봇 계정 로그인 id — 로그인 필수 |
 | `DAOU_PASSWORD` | 봇 계정 비밀번호 — 무인 자동 재로그인용. 프로필에 저장되므로 한 번 `daoubot login` 했으면 다시 설정할 필요 없음 |
+| `DAOU_LOG_LEVEL` | `daouoffice` 패키지 로거 레벨(`DEBUG`/`INFO`/`WARNING`/…). 연결값 아님. 미설정 시 앱 로깅 설정을 따름(라이브러리는 root/basicConfig 를 건드리지 않음). 메시지 본문·발신자 로그는 기본적으로 `DEBUG` 라 기본 `INFO` 에서는 **대화 내용이 로깅되지 않음** — 진단 시 `DEBUG` 로 켜고, 더 조용히 하려면 `WARNING` |
 
-위 4개(`DAOU_` 접두사)가 **SDK가 읽는 환경 변수의 전부**입니다. 개별 예제가 자체적으로 쓰는 변수(LLM 키, 대상 방 id 등)는 각 예제의 docstring 에 적혀 있습니다 — SDK 코어와 무관하므로 여기서 다루지 않습니다.
+위 5개(`DAOU_` 접두사)가 **SDK가 읽는 환경 변수의 전부**입니다. 개별 예제가 자체적으로 쓰는 변수(LLM 키, 대상 방 id 등)는 각 예제의 docstring 에 적혀 있습니다 — SDK 코어와 무관하므로 여기서 다루지 않습니다.
 
 ## 빠른 시작
 
