@@ -76,7 +76,7 @@ daoubot login --base-url https://yourcompany.daouoffice.com --login-id my-bot
 
 환경 변수와 `.daoubot/profile.json` 은 키가 겹쳐 보여도 **역할이 다릅니다**: 환경 변수는 *봇을 실행*하고 *자격증명을 전달*하는 입력이며 **비밀번호는 여기에만** 있습니다. 프로필은 `daoubot` **CLI 명령**이 재로그인 없이 쓰는 세션 캐시(토큰 보관, 비밀번호 없음)일 뿐, `DaouBot` 은 프로필 토큰을 쓰지 않고 자격증명으로 (재)로그인합니다. 즉 봇 실행에 필요한 건 env(또는 인자)이고, 프로필은 CLI 편의 캐시입니다.
 
-프로필 파일의 형태는 [`profile.example.json`](profile.example.json) 참고(비밀번호·토큰은 들어가지 않음 — 나머지는 `daoubot login` 이 채움). 한 호스트에서 여러 봇/테넌트를 쓰려면 `daoubot --config <경로>` 로 프로필 파일 위치를 분리하세요(`login --config X` 가 거기 쓰고 다른 명령이 거기서 읽음).
+프로필 파일의 형태는 [`profile.example.json`](profile.example.json) 참고(비밀번호·토큰은 들어가지 않음 — 나머지는 `daoubot login` 이 채움). 한 호스트에서 여러 봇/테넌트를 쓰려면 `--config <경로>` 로 프로필 파일 위치를 분리하세요 — 옵션은 **서브커맨드 뒤**에 옵니다(`daoubot login --config X ...` 가 거기 쓰고, `daoubot rooms --config X` 등 다른 명령이 거기서 읽음).
 
 예제·아래 코드는 네 개의 `DAOU_*` 를 **명시적으로 환경에서 읽어** 무엇이 필요한지 코드에 드러냅니다(시크릿 하드코딩 없음, 마법 없음). 실배포/CLI 용 단축이 필요하면 `DaouBot.from_env(...)` / `BotClient.from_env()` 가 env·프로필을 읽어 한 줄로 생성합니다(`load_settings()` 직접 조회 가능, 비밀번호는 프로필에서 절대 안 읽음).
 
@@ -137,7 +137,7 @@ daoubot room open <room_id>            # 방 상세 + 구성원
 daoubot send <room_id> "<text>"        # 메시지 전송
 daoubot start                          # 폴링 봇 실행
 
-daoubot --config bots/a.json login ... # 프로필 파일 위치 분리(멀티 봇/테넌트)
+daoubot login --config bots/a.json ... # 프로필 파일 위치 분리(멀티 봇/테넌트)
 ```
 
 `--password` 를 생략하면 숨김 프롬프트로 입력받습니다(argv·히스토리 노출 방지).

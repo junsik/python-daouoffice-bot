@@ -82,6 +82,7 @@ def test_cli_login_writes_profile(tmp_path, monkeypatch, capsys) -> None:
     )
     cli_main(
         [
+            "login",
             "--base-url",
             BASE,
             "--company-id",
@@ -90,7 +91,6 @@ def test_cli_login_writes_profile(tmp_path, monkeypatch, capsys) -> None:
             "acme-bot",
             "--password",
             "pw",
-            "login",
         ]
     )
     prof = load_profile(base_dir=tmp_path)
@@ -118,6 +118,7 @@ def test_cli_config_path_isolates_profiles(tmp_path, monkeypatch) -> None:
     cfg = tmp_path / "bot-a.json"
     cli_main(
         [
+            "login",
             "--config",
             str(cfg),
             "--base-url",
@@ -128,7 +129,6 @@ def test_cli_config_path_isolates_profiles(tmp_path, monkeypatch) -> None:
             "a",
             "--password",
             "pw",
-            "login",
         ]
     )
     # written to the --config path, NOT the default ./.daoubot/profile.json
@@ -159,6 +159,30 @@ def test_cli_rooms_without_profile_errors(tmp_path, monkeypatch) -> None:
     monkeypatch.delenv("DAOU_BASE_URL", raising=False)
     with pytest.raises(SystemExit):
         cli_main(["rooms"])
+
+
+def test_options_parse_after_subcommand() -> None:
+    # Regression: connection options must be accepted AFTER the subcommand,
+    # exactly as every doc shows (`daoubot login --base-url ...`).
+    p = cli.build_parser()
+    ns = p.parse_args(
+        [
+            "login",
+            "--base-url",
+            "https://x.daouoffice.com",
+            "--login-id",
+            "b",
+            "--password",
+            "p!@#",
+        ]
+    )
+    assert ns.command == "login" and ns.base_url == "https://x.daouoffice.com"
+    assert ns.password == "p!@#"
+    ns2 = p.parse_args(["rooms", "--config", "bots/a.json"])
+    assert ns2.command == "rooms" and ns2.config == "bots/a.json"
+    ns3 = p.parse_args(["room", "create", "--users", "1,2", "--base-url", "https://x"])
+    assert ns3.command == "room" and ns3.room_command == "create"
+    assert ns3.base_url == "https://x"
 
 
 def test_resolve_password_flag_env_prompt(monkeypatch) -> None:

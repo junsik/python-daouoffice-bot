@@ -219,41 +219,54 @@ def cmd_start(args: argparse.Namespace) -> None:
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(prog="daoubot", description="DaouOffice bot CLI")
-    parser.add_argument(
+    # Connection options live on a shared parent applied to every
+    # subcommand, so they work AFTER the subcommand
+    # (`daoubot login --base-url ...`) — which is how all docs show it.
+    # (argparse does not accept main-parser options after a subcommand.)
+    common = argparse.ArgumentParser(add_help=False)
+    common.add_argument(
         "--config",
         help="profile file path (default: ./.daoubot/profile.json); "
         "use a per-bot/tenant path for multiple accounts on one host",
     )
-    parser.add_argument("--base-url", help="tenant URL (env DAOU_BASE_URL)")
-    parser.add_argument("--company-id", help="tenant company id (env DAOU_COMPANY_ID)")
-    parser.add_argument("--login-id", help="bot login id (env DAOU_LOGIN_ID)")
-    parser.add_argument(
+    common.add_argument("--base-url", help="tenant URL (env DAOU_BASE_URL)")
+    common.add_argument("--company-id", help="tenant company id (env DAOU_COMPANY_ID)")
+    common.add_argument("--login-id", help="bot login id (env DAOU_LOGIN_ID)")
+    common.add_argument(
         "--password",
         help="bot password (env DAOU_PASSWORD; omit to be prompted securely)",
     )
+
+    parser = argparse.ArgumentParser(
+        prog="daoubot",
+        description="DaouOffice bot CLI — options go after the subcommand, "
+        "e.g. `daoubot login --base-url ... --login-id ...`",
+    )
     sub = parser.add_subparsers(dest="command", required=True)
 
-    sub.add_parser("login", help="authenticate and save .daoubot/profile.json")
-    sub.add_parser("discover", help="look up company id / uuid / domain")
-    sub.add_parser("whoami", help="print the saved bot identity")
-    sub.add_parser("rooms", help="list chat rooms with their room ids")
+    def add(name: str, help_text: str) -> argparse.ArgumentParser:
+        return sub.add_parser(name, help=help_text, parents=[common])
+
+    add("login", "authenticate and save the profile")
+    add("discover", "look up company id / uuid / domain")
+    add("whoami", "print the saved bot identity")
+    add("rooms", "list chat rooms with their room ids")
 
     p_room = sub.add_parser("room", help="room operations").add_subparsers(
         dest="room_command", required=True
     )
-    p_create = p_room.add_parser("create", help="create a chat room")
+    p_create = p_room.add_parser("create", help="create a chat room", parents=[common])
     p_create.add_argument("--users", required=True, help="comma-separated user ids")
     p_create.add_argument("--name", default=None)
     p_create.add_argument("--type", default="SINGLE", choices=("SINGLE", "GROUP"))
-    p_open = p_room.add_parser("open", help="show room detail + members")
+    p_open = p_room.add_parser("open", help="show room detail + members", parents=[common])
     p_open.add_argument("room_id")
 
-    p_send = sub.add_parser("send", help="send a message to a room")
+    p_send = add("send", "send a message to a room")
     p_send.add_argument("room_id")
     p_send.add_argument("message")
 
-    sub.add_parser("start", help="run the polling bot (read-only without a handler)")
+    add("start", "run the polling bot (read-only without a handler)")
     return parser
 
 

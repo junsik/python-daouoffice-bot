@@ -16,7 +16,12 @@ First open-source release. Reverse-engineered from the DaouOffice PC messenger R
 - Mention parsing: inline `{{uuid::USER::@name::id}}` / `{{uuid::ALL::@ALL}}` tokens are parsed into `NewMessage.mentions` / `mentions_me` / `mention_all`, with a human-readable `message_text` and original `raw_text`. New `only_when_mentioned(handler)` filter gates noisy group rooms (no global knob — policy stays declarative). Encoding documented in `docs/api/03-messages.md` §3.6.
 - `load_settings()` + `DaouBot.from_env()` / `BotClient.from_env()`: single resolver (arg > `DAOU_*` env > profile; password never from profile) — a terse shortcut for production/CLI. Examples instead construct `DaouBot` explicitly reading the four `DAOU_*` vars, so required inputs stay visible (no hard-coded secrets, no hidden config).
 - The message-handler argument is `on_message` (was `prompt_func`, which wrongly implied an LLM-prompt coupling); `set_handler()` (was `set_prompt_func`); type `MessageHandler`.
-- Removed the misleading `.env.example` (the SDK never read `.env` — no dotenv). The profile file is the one config file the tool reads/writes; `profile.example.json` shows its shape (non-secret fields only — no password/token), and `daoubot --config <path>` relocates it for multi-bot/tenant hosts. `load_profile`/`save_profile`/`load_settings` take an explicit path.
+- Removed the misleading `.env.example` (the SDK never read `.env` — no dotenv). The profile file is the one config file the tool reads/writes; `profile.example.json` shows its shape (non-secret fields only — no password/token), and `--config <path>` (after the subcommand) relocates it for multi-bot/tenant hosts. `load_profile`/`save_profile`/`load_settings` take an explicit path.
+- **Fixed**: connection options after a subcommand
+  (`daoubot login --base-url ...`, exactly as every doc shows) failed with
+  "unrecognized arguments" — they were on the main parser, which argparse
+  won't parse past a subcommand. Moved to a shared parent applied to every
+  subcommand, so the documented form works.
 - CLI: when `--password`/`DAOU_PASSWORD` is omitted, `login`/`start` prompt for it securely (hidden, via `getpass`) on a TTY — keeps the secret out of argv (`ps`/shell history) and sidesteps shell quoting of `!`/special chars.
 - Graceful shutdown: `run_forever()` installs SIGINT/SIGTERM handlers and logs out cleanly (matters under systemd, which stops with SIGTERM); falls back to plain cancellation where signals are unavailable.
 - Exponential backoff on sustained poll failure (cap 5 min) instead of a flat retry every interval.
