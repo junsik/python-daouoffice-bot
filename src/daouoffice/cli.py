@@ -3,7 +3,7 @@
 Onboarding flow for SDK developers::
 
     daoubot login --base-url https://acme.daouoffice.com \\
-        --login-id my-bot --password '...'        # → saves .daoubot/profile.json
+        --login-id my-bot --password '...'        # → saves ~/.daoubot/profile.json
 
     daoubot whoami                                # company + bot identity
     daoubot rooms                                 # list rooms (with room ids)
@@ -269,7 +269,7 @@ def build_parser() -> argparse.ArgumentParser:
     common = argparse.ArgumentParser(add_help=False)
     common.add_argument(
         "--config",
-        help="profile file path (default: ./.daoubot/profile.json); "
+        help="profile file path (default: ~/.daoubot/profile.json); "
         "use a per-bot/tenant path for multiple accounts on one host",
     )
     common.add_argument("--base-url", help="tenant URL (env DAOU_BASE_URL)")

@@ -48,7 +48,7 @@ Compose these — they are orthogonal (e.g. `RoomRouter` whose group handler is 
 python skills/daouoffice-bot/scaffold.py > bot.py   # path: where the skill is installed
 ```
 
-Then implement the handler. Build the bot as `DaouBot(on_message=...)` — it resolves connection from the operator's `daoubot login` profile (or `DAOU_*` env / explicit args; precedence arg > env > profile). Never put credentials or a tenant URL in the bot code. The user runs `daoubot login` once first; tell them to set `DAOU_PASSWORD` (e.g. systemd EnvironmentFile) for unattended auto re-login. Read room ids from env/args too.
+Then implement the handler. Build the bot as `DaouBot(on_message=...)` — it resolves connection from the operator's `daoubot login` profile (or `DAOU_*` env / explicit args; precedence arg > env > profile). Never put credentials or a tenant URL in the bot code. The user runs `daoubot login` once first — that persists the password in `~/.daoubot/profile.json` (chmod 600, gitignored, home-anchored so it works from any directory), so the daemon re-authenticates unattended with no extra config. `DAOU_PASSWORD` is only an optional override. Read room ids from env/args too.
 
 ## Step 4 — Invariants you MUST keep (the SDK's hard rules)
 

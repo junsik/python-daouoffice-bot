@@ -1,8 +1,8 @@
 """DaouOffice Messenger SDK — high-level :class:`DaouBot`.
 
 A bot is a background daemon. Onboard once with ``daoubot login`` (writes
-``.daoubot/profile.json`` — tenant, identity and a session token; never the
-password). Then the bot just runs:
+``~/.daoubot/profile.json`` — tenant, identity, session token and the
+password, so it re-authenticates unattended). Then the bot just runs:
 
     import asyncio
     from daouoffice import DaouBot, NewMessage
@@ -110,11 +110,11 @@ def _build_client(
 class DaouBot:
     """High-level DaouOffice messenger bot (background daemon).
 
-    All connection settings resolve from ``daoubot login``'s
-    ``.daoubot/profile.json``, overridable by an explicit argument or a
-    ``DAOU_*`` environment variable (precedence: argument > env > profile).
-    The password is never read from the profile — pass it or set
-    ``DAOU_PASSWORD`` so the bot can re-authenticate unattended.
+    All connection settings (including the password) resolve from
+    ``daoubot login``'s ``~/.daoubot/profile.json``, overridable by an
+    explicit argument or a ``DAOU_*`` environment variable (precedence:
+    argument > env > profile). The persisted password lets the daemon
+    re-authenticate unattended when the token expires.
 
     Args:
         base_url / company_id / login_id / password: connection overrides;

@@ -2,8 +2,9 @@
 
 One place to answer "where do base_url / company_id / login_id / password
 come from": explicit argument > ``DAOU_*`` environment variable > saved
-``.daoubot/profile.json``. The password is **never** read from the profile
-(it is never stored there) — only from the argument or ``DAOU_PASSWORD``.
+``~/.daoubot/profile.json``. The password too: it is persisted in the
+profile (chmod 600, gitignored) so a daemon re-authenticates unattended;
+``DAOU_PASSWORD`` / an explicit argument still override it.
 
 Used by :class:`DaouBot` to resolve connection settings, so a bot is just
 ``DaouBot(on_message=...)`` after ``daoubot login``.
@@ -38,7 +39,7 @@ def load_settings(
     """Resolve connection settings (arg > env > profile, for all incl. password).
 
     ``config_path`` points at an explicit profile file (the CLI ``--config``);
-    otherwise the default ``.daoubot/profile.json`` is used.
+    otherwise the default ``~/.daoubot/profile.json`` is used.
 
     Raises:
         DaouConfigError: if ``base_url`` cannot be resolved.

@@ -15,7 +15,9 @@ ENV_KEYS = ("DAOU_BASE_URL", "DAOU_COMPANY_ID", "DAOU_LOGIN_ID", "DAOU_PASSWORD"
 def _clean_env(monkeypatch, tmp_path):
     for k in ENV_KEYS:
         monkeypatch.delenv(k, raising=False)
-    monkeypatch.chdir(tmp_path)  # isolate .daoubot/
+    # Profile defaults to ~/.daoubot/; redirect HOME to a temp dir so a
+    # developer's real profile never leaks into the test.
+    monkeypatch.setattr("daouoffice.profile.Path.home", lambda: tmp_path)
 
 
 def test_env_resolution(monkeypatch) -> None:
@@ -29,20 +31,23 @@ def test_env_resolution(monkeypatch) -> None:
     assert s.login_id == "bot" and s.password == "pw"
 
 
-def test_profile_fallback_but_never_password(tmp_path, monkeypatch) -> None:
+def test_profile_fallback_includes_password(tmp_path, monkeypatch) -> None:
     save_profile(
         Profile(
             base_url="https://acme.daouoffice.com",
             company_id="11000000000",
             login_id="bot",
             access_token="tok",
+            password="stored-pw",
         ),
         base_dir=tmp_path,
     )
     s = load_settings()
     assert s.base_url == "https://acme.daouoffice.com"
     assert s.login_id == "bot"
-    assert s.password == ""  # never sourced from the profile
+    # Persisted so the daemon re-authenticates unattended.
+    assert s.password == "stored-pw"
+    # Env still overrides the stored password.
     monkeypatch.setenv("DAOU_PASSWORD", "pw")
     assert load_settings().password == "pw"
 

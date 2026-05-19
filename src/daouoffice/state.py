@@ -54,10 +54,14 @@ class MemoryCursorStore:
 
 
 class FileCursorStore:
-    """Cursor store persisted to ``<base_dir>/.daoubot/cursors.json``."""
+    """Cursor store persisted to ``<base_dir or ~>/.daoubot/cursors.json``.
+
+    Anchored at the user's home (like the profile), so a bot resumes from
+    the same cursor regardless of the directory it is launched from.
+    """
 
     def __init__(self, base_dir: str | os.PathLike[str] | None = None) -> None:
-        root = Path(base_dir) if base_dir else Path.cwd()
+        root = Path(base_dir) if base_dir else Path.home()
         self._path = root / PROFILE_DIR / CURSOR_FILE
         self._cursors = self._load()
 

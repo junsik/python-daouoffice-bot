@@ -44,13 +44,13 @@ Telegram/Slack/Discord 는 봇 *플랫폼* 을 준다: 등록 체계(BotFather /
 flowchart TD
     CLI[daoubot CLI] --> DaouBot
     CLI --> BotClient
-    CLI --> Profile["Profile<br/>.daoubot/profile.json"]
+    CLI --> Profile["Profile<br/>~/.daoubot/profile.json"]
 
     subgraph SDK
         DaouBot -->|소유| BotEngine
         DaouBot -->|소유| BotClient
         BotEngine -->|호출| BotClient
-        BotEngine -->|읽기/쓰기| CursorStore["CursorStore<br/>.daoubot/cursors.json"]
+        BotEngine -->|읽기/쓰기| CursorStore["CursorStore<br/>~/.daoubot/cursors.json"]
         BotEngine -->|디스패치| PF["on_message / RoomRouter"]
     end
 
@@ -129,14 +129,14 @@ flowchart TD
 - 읽음 처리도 이를 따른다: 마지막으로 ack된 메시지까지만 읽음 처리하여 실패분은 unread로 남아 재폴링되고, 대기 중인 게 없을 때만 방이 완전히 정리된다.
 - fire-and-forget 은 별도 모드가 아니다 — 핸들러가 자기 예외를 삼키면 "실패"로 치지 않으므로 재시도되지 않는다(userland 탈출구).
 
-## 6. 디스크 상태 (`.daoubot/`, gitignore)
+## 6. 디스크 상태 (`~/.daoubot/`, gitignore)
 
 | 파일 | 작성 주체 | 내용 | 비밀? |
 |---|---|---|---|
 | `profile.json` | `daoubot login` | 테넌트 + 신원 + 세션 토큰 + 비밀번호 | 예 (토큰·비밀번호) |
 | `cursors.json` | 엔진(`FileCursorStore`) | `room_id → 마지막 처리 id` | 아니오 |
 
-비밀번호는 무인 자동 재로그인을 위해 `profile.json` 에 저장된다 — 파일은 `chmod 600`·`.daoubot/` gitignore 이고, 화면에는 `Profile.public_dict()` 가 `****` 로 마스킹한다(`daoubot login` 출력 등). `--config` 로 프로필 경로를 분리해 한 호스트에서 여러 봇/테넌트를 운용한다.
+두 파일 모두 홈 디렉터리의 `~/.daoubot/` 에 놓인다 — 실행 cwd 와 무관(`~/.aws`/`~/.docker` 류 관례)하므로 어느 디렉터리·예제에서 실행하든 같은 로그인·커서를 재사용한다. 비밀번호는 무인 자동 재로그인을 위해 `profile.json` 에 저장된다 — 파일은 `chmod 600`·`.daoubot/` gitignore 이고, 화면에는 `Profile.public_dict()` 가 `****` 로 마스킹한다(`daoubot login` 출력 등). `--config`/`config_path` 로 프로필 경로를 분리해 한 호스트에서 여러 봇/테넌트를 운용한다.
 
 ## 7. 주요 설계 결정
 

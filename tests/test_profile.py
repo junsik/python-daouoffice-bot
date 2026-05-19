@@ -16,6 +16,13 @@ from daouoffice.profile import Profile, load_profile, save_profile
 BASE = "https://acme.daouoffice.com"
 
 
+@pytest.fixture(autouse=True)
+def _home_in_tmp(monkeypatch, tmp_path):
+    # Profile/cursors default to ~/.daoubot/; anchor HOME at tmp_path so a
+    # test never reads or clobbers the developer's real profile.
+    monkeypatch.setattr("daouoffice.profile.Path.home", lambda: tmp_path)
+
+
 def test_save_load_roundtrip(tmp_path) -> None:
     p = Profile(base_url=BASE, company_id="11000", user_id="42", access_token="tok")
     path = save_profile(p, base_dir=tmp_path)
@@ -136,7 +143,7 @@ def test_cli_config_path_isolates_profiles(tmp_path, monkeypatch) -> None:
             "pw",
         ]
     )
-    # written to the --config path, NOT the default ./.daoubot/profile.json
+    # written to the --config path, NOT the default ~/.daoubot/profile.json
     assert cfg.exists()
     assert load_profile(base_dir=tmp_path) is None
     assert load_profile(path=cfg).user_id == "7"

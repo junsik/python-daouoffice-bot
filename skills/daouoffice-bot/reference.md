@@ -12,8 +12,8 @@ Condensed, self-contained API + gotchas for building bots. (Repo docs: `docs/ARC
 | `NewMessage` | Inbound message (see fields below). |
 | `RoomRouter` | Per-room handler dispatch; **allowlist** — unregistered rooms ignored. `add_room(id, fn)`, `add_room_type("SINGLE"/"GROUP", fn)`, `set_default(fn)`, decorators `@router.room(id)` / `@router.room_type(t)` / `@router.default`. Pass the router as `on_message`. |
 | `only_when_mentioned(fn, *, include_all=True)` | Wrap a handler so it runs only when `mentions_me` (or `@ALL`). Composable with `on_message` or a router handler. |
-| `load_settings(...)` / `Settings` | Resolve base_url/company_id/login_id/password: arg > `DAOU_*` env > profile. Password never from profile. |
-| `Profile` / `load_profile` / `save_profile` | `.daoubot/profile.json` model. |
+| `load_settings(...)` / `Settings` | Resolve base_url/company_id/login_id/password: arg > `DAOU_*` env > profile (password included, so a daemon re-auths unattended). |
+| `Profile` / `load_profile` / `save_profile` | `~/.daoubot/profile.json` model (home-anchored, cwd-independent). |
 | `FileCursorStore` / `MemoryCursorStore` / `CursorStore` | Where "processed up to" is persisted. `DaouBot` defaults to `FileCursorStore` (restart-resume). |
 | `BotIdentity` | Resolved bot identity (user_id, company_*). |
 | `DaouAuthError` / `DaouConfigError` | Exceptions. |
@@ -24,7 +24,7 @@ Condensed, self-contained API + gotchas for building bots. (Repo docs: `docs/ARC
 
 ## CLI (`daoubot`)
 
-`discover --base-url URL` · `login` · `whoami` · `rooms` · `room create --users a,b [--name N] [--type GROUP]` · `room open <id>` · `send <room_id> "<text>"` · `start`. Global `--config <path>` selects an alternate profile file (multi-bot/tenant on one host); default `./.daoubot/profile.json`. Precedence: flag > env > profile. Password is never written to the profile — env/arg only.
+`discover --base-url URL` · `login` · `whoami` · `rooms` · `room create --users a,b [--name N] [--type GROUP]` · `room open <id>` · `send <room_id> "<text>"` · `start`. Global `--config <path>` selects an alternate profile file (multi-bot/tenant on one host); default `~/.daoubot/profile.json` (home-anchored, so it works from any directory). Precedence: flag > env > profile. The password is persisted in the profile (chmod 600, gitignored, `****`-masked on stdout) so a daemon re-authenticates unattended; `DAOU_PASSWORD`/an arg still override it.
 
 ## Gotchas (encode these in any bot you build)
 

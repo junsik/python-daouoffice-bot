@@ -6,7 +6,7 @@
 
 [![CI](https://github.com/junsik/python-daouoffice-bot/actions/workflows/ci.yml/badge.svg)](https://github.com/junsik/python-daouoffice-bot/actions/workflows/ci.yml) ![Python](https://img.shields.io/badge/python-3.12%2B-blue) ![License](https://img.shields.io/badge/license-MIT-green)
 
-> ⚠️ **비공식·역분석 프로젝트입니다.** 다우오피스/다우기술과 무관하며, 비공개 API에 의존하므로 서버 변경 시 동작이 깨질 수 있습니다. 사용 전 소속 조직의 정책과 서비스 약관을 확인하세요. 자동화 계정 발급 권한이 있는 환경에서만 사용하십시오.
+> ⚠️ **비공식·역분석 프로젝트입니다.** 다우오피스/다우기술과 무관하며, 비공개 API에 의존하므로 서버 변경 시 동작이 깨질 수 있습니다. 사용 전 소속 조직의 정책과 서비스 약관을 확인하세요. 자동화 계정 발급 권한이 있는 환경에서만 사용하십시오. **공개 시점 스냅샷("as-is")으로 제공되며 적극적인 유지보수를 약속하지 않습니다.** 일부 계약(첨부 전송 등)은 SAZ 캡처 기반으로 도출돼 라이브 미검증입니다 — 포크 시 실제 트래픽으로 확인하세요.
 
 ## 일반 메신저 봇과 무엇이 다른가 (이 프로젝트가 존재하는 이유)
 
@@ -46,13 +46,13 @@ uv sync                 # 또는: pip install -e .
 
 ## 온보딩: `daoubot login` → 프로필
 
-봇은 백그라운드 데몬입니다. 처음 한 번 로그인하면 회사·사용자 정보, 세션 토큰, **비밀번호**가 `./.daoubot/profile.json` 에 저장되고, 이후 코드/명령은 그 프로필을 자동으로 씁니다. 데몬이 무인 자동 재로그인하려면 비밀번호가 필요하므로 저장하는 것이며 — 파일은 `chmod 600`·`.daoubot/` gitignore, 화면 출력 시에는 항상 `****` 로 마스킹합니다. `company_id` 를 안 주면 공개 엔드포인트로 자동 탐색합니다.
+봇은 백그라운드 데몬입니다. 처음 한 번 로그인하면 회사·사용자 정보, 세션 토큰, **비밀번호**가 `~/.daoubot/profile.json`(홈 디렉터리, 실행 위치 무관 — `~/.aws`/`~/.docker` 와 같은 방식)에 저장되고, 이후 코드/명령은 어느 디렉터리에서 실행하든 그 프로필을 자동으로 씁니다. 데몬이 무인 자동 재로그인하려면 비밀번호가 필요하므로 저장하는 것이며 — 파일은 `chmod 600`·`.daoubot/` gitignore, 화면 출력 시에는 항상 `****` 로 마스킹합니다. `company_id` 를 안 주면 공개 엔드포인트로 자동 탐색합니다.
 
 ```bash
 # --password 를 생략하면 숨김 프롬프트로 안전하게 입력받습니다
 # (argv·셸 히스토리에 안 남고, ! 같은 특수문자 인용 문제도 없음):
 daoubot login --base-url https://yourcompany.daouoffice.com --login-id my-bot
-# → .daoubot/profile.json 저장 (토큰·비밀번호는 화면엔 **** 로만 표시)
+# → ~/.daoubot/profile.json 저장 (토큰·비밀번호는 화면엔 **** 로만 표시)
 ```
 
 한 호스트에서 여러 봇/테넌트를 쓰려면 `--config <경로>` 로 프로필 파일을 분리합니다 — 옵션은 **서브커맨드 뒤**에 옵니다(`daoubot login --config X ...`, `daoubot rooms --config X`). 형태는 [`profile.example.json`](profile.example.json) 참고(실제 시크릿은 안 들어간 빈 템플릿).
@@ -105,7 +105,7 @@ bot = DaouBot(..., on_message=only_when_mentioned(handle))
 
 **파일 첨부 (예: LLM 뉴스레터):** 채팅은 MD/HTML 을 인라인 렌더하지 않습니다. `bot.send_file(room_id, "news.md", "이번 주 뉴스레터")` 로 업로드 → 첨부로 전송(수신자 다운로드). `BotClient.upload_attachment()` + `send_message(..., attachments=[...])` 분해도 가능. 첨부 계약은 SAZ 기반이며 **라이브 미검증**입니다([docs/api/03-messages.md](docs/api/03-messages.md) §3.7).
 
-**재시작 복구:** "어디까지 처리했는지"(방별 마지막 메시지 id)는 기본적으로 `.daoubot/cursors.json` 에 저장됩니다 — 봇이 재시작해도 백로그를 다시 처리하거나 다운타임 메시지를 건너뛰지 않고 이어받습니다. 비영속을 원하면 `DaouBot(..., cursor_store=MemoryCursorStore())`. 단, 폴링 특성상 따라잡기는 방당 최근 ~20개 히스토리 창 안으로 제한됩니다(그보다 오래 다운되면 창 밖 메시지는 복구 불가 — "since id" 엔드포인트가 없음).
+**재시작 복구:** "어디까지 처리했는지"(방별 마지막 메시지 id)는 기본적으로 `~/.daoubot/cursors.json` 에 저장됩니다 — 봇이 재시작해도(어느 디렉터리에서 실행하든) 백로그를 다시 처리하거나 다운타임 메시지를 건너뛰지 않고 이어받습니다. 비영속을 원하면 `DaouBot(..., cursor_store=MemoryCursorStore())`. 단, 폴링 특성상 따라잡기는 방당 최근 ~100개 히스토리 창 안으로 제한됩니다(그보다 오래 다운되면 창 밖 메시지는 복구 불가 — "since id" 엔드포인트가 없음).
 
 **전달 보장:** 엔진은 **at-least-once** 를 보장합니다 — 메시지 전달의 업계 표준(Kafka/SQS/Slack/Telegram)이라 노브로 노출하지 않고 SDK가 책임집니다. 핸들러가 예외 없이 끝날 때까지 방 내 순서대로 재전달하며, 같은 메시지가 `max_attempts`(기본 5)회 실패하면 poison으로 건너뜁니다.
 
@@ -139,6 +139,7 @@ daoubot login --config bots/a.json ... # 프로필 파일 위치 분리(멀티 �
 |---|---|
 | `bot-echobot` | 받은 메시지를 그대로 반복 |
 | `bot-command` | `!cmd args` 명령 디스패처 (help/echo/whoami) |
+| `bot-attachment` | `!report` → 그 자리에서 .md 생성해 파일 첨부로 답장 (`send_file`) |
 | `bot-conversation` | 방별 상태 머신 대화 |
 | `bot-assistant` | 핸들러에서 OpenAI 호환 LLM 호출 (LLM_* env 필요) |
 | `bot-router` | 방별 핸들러 분기 (등록한 방만 처리하는 allowlist) |
@@ -208,8 +209,8 @@ npx skills add junsik/python-daouoffice-bot --skill daouoffice-bot
 
 ```
 src/daouoffice/         SDK 패키지 (import daouoffice)
-examples/               실행 가능한 예제 봇 (echobot/command/conversation/
-                        assistant/router/error-handler)
+examples/               실행 가능한 예제 봇 (echobot/command/attachment/
+                        conversation/assistant/router/error-handler/room-saver)
 skills/daouoffice-bot/  배포용 에이전트 스킬 (SKILL.md + reference.md + scaffold.py)
 docs/                   ARCHITECTURE.md (설계 근거) + api/ (역분석 엔드포인트 레퍼런스)
 tools/                  SAZ 캡처 분석 스크립트 (개발용)
@@ -226,7 +227,7 @@ uv run ruff format --check .
 uv run pytest -q
 ```
 
-설계 배경과 다이어그램은 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md), 향후 계획은 [ROADMAP.md](ROADMAP.md), 기여 가이드는 [CONTRIBUTING.md](CONTRIBUTING.md), 변경 이력은 [CHANGELOG.md](CHANGELOG.md)를 참고하세요.
+설계 배경과 다이어그램은 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md), 기여 가이드는 [CONTRIBUTING.md](CONTRIBUTING.md), 변경 이력은 [CHANGELOG.md](CHANGELOG.md)를 참고하세요.
 
 ## 라이선스
 
