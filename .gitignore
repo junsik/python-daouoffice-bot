@@ -49,6 +49,9 @@ Thumbs.db
 *.log
 opencode.json
 
+# Bot runtime output (e.g. examples/bot-room-saver writes room-chat.jsonl)
+*.jsonl
+
 # scrape-kit plugin runtime (dev tooling, not part of the project)
 .scrape-kit/
 
