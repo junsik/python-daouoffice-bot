@@ -123,12 +123,13 @@ daoubot rooms                          # 채팅방 목록 (room id 포함)
 daoubot room create --users a,b --name "Bot Test" [--type GROUP]
 daoubot room open <room_id>            # 방 상세 + 구성원
 daoubot send <room_id> "<text>"        # 메시지 전송
-daoubot start                          # 폴링 봇 실행
 
 daoubot login --config bots/a.json ... # 프로필 파일 위치 분리(멀티 봇/테넌트)
 ```
 
-`--password` 를 생략하면 숨김 프롬프트로 입력받습니다(argv·히스토리 노출 방지).
+CLI는 온보딩·조회·단발 전송용입니다. **봇 실행은 CLI가 아니라** `DaouBot(on_message=...)` 를 담은 파이썬 스크립트(`python my_bot.py`)입니다 — CLI는 핸들러를 실을 수 없어 별도 `start` 명령을 두지 않습니다(아래 [빠른 시작](#빠른-시작)·`examples/`).
+
+`--login-id`/`--password` 를 생략하면 (이 순서로) 프롬프트로 입력받습니다(비밀번호는 숨김 — argv·히스토리 노출 방지).
 
 개발자는 `login` → `rooms`/`room create` 로 필요한 `company_id`·`user_id`·`room_id` 를 손에 넣은 뒤, 그 값들로 SDK 봇을 작성하면 됩니다. (설치 없이: `uv run python -m daouoffice.cli rooms`)
 

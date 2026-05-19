@@ -42,8 +42,7 @@ Telegram/Slack/Discord 는 봇 *플랫폼* 을 준다: 등록 체계(BotFather /
 
 ```mermaid
 flowchart TD
-    CLI[daoubot CLI] --> DaouBot
-    CLI --> BotClient
+    CLI[daoubot CLI] --> BotClient
     CLI --> Profile["Profile<br/>~/.daoubot/profile.json"]
 
     subgraph SDK

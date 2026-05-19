@@ -10,7 +10,10 @@ Onboarding flow for SDK developers::
     daoubot room create --users 110...,110... --name "Bot Test"
     daoubot room open <room_id>                   # members + detail
     daoubot send <room_id> "hello"
-    daoubot start                                 # run the polling bot
+
+The bot itself is a Python program (``DaouBot(on_message=...)`` run as
+``python my_bot.py``) — the CLI cannot carry a handler, so there is no
+``start`` subcommand; see the README / examples.
 
 After ``login`` the saved session token is reused, so later commands need no
 credentials. Settings precedence: CLI flag > environment variable > profile.
@@ -20,7 +23,6 @@ Connection env vars: DAOU_BASE_URL, DAOU_COMPANY_ID, DAOU_LOGIN_ID, DAOU_PASSWOR
 from __future__ import annotations
 
 import argparse
-import asyncio
 import dataclasses
 import getpass
 import json
@@ -30,7 +32,7 @@ import unicodedata
 
 import httpx
 
-from daouoffice import BotClient, DaouBot
+from daouoffice import BotClient
 from daouoffice.client import DaouAuthError, DaouConfigError
 from daouoffice.profile import Profile, load_profile, profile_path, save_profile
 
@@ -260,23 +262,6 @@ def cmd_send(args: argparse.Namespace) -> None:
         client._client.close()
 
 
-def cmd_start(args: argparse.Namespace) -> None:
-    prof, base_url, company_id = _settings(args)
-    cfg = _cfg(args)
-    login_id = _pick(args.login_id, "DAOU_LOGIN_ID", prof.login_id if prof else None)
-    password = _resolve_password(args, prof.password if prof else None)
-    if not (login_id and password and company_id):
-        _die("`start` needs login_id, a password (flag/env/profile) and company_id")
-    client = BotClient(
-        login_id,
-        password,
-        base_url=base_url,
-        company_id=company_id,
-        on_auth=lambda c: _store(c, base_url, cfg),  # persist refreshed token on 401 re-login
-    )
-    asyncio.run(DaouBot(client=client).run_forever())
-
-
 def build_parser() -> argparse.ArgumentParser:
     # Connection options live on a shared parent applied to every
     # subcommand, so they work AFTER the subcommand
@@ -324,8 +309,6 @@ def build_parser() -> argparse.ArgumentParser:
     p_send = add("send", "send a message to a room")
     p_send.add_argument("room_id")
     p_send.add_argument("message")
-
-    add("start", "run the polling bot (read-only without a handler)")
     return parser
 
 
@@ -339,11 +322,26 @@ def _dispatch(args: argparse.Namespace) -> None:
         "whoami": cmd_whoami,
         "rooms": cmd_rooms,
         "send": cmd_send,
-        "start": cmd_start,
     }[args.command](args)
 
 
+def _force_utf8_io() -> None:
+    """Make stdout/stderr UTF-8.
+
+    Korean Windows consoles default to cp949, so printing Korean JSON (room
+    names, identity) or an em-dash in ``--help`` raises UnicodeEncodeError
+    and crashes the CLI. Re-encode as UTF-8, replacing anything the console
+    cannot render instead of raising.
+    """
+    for stream in (sys.stdout, sys.stderr):
+        try:
+            stream.reconfigure(encoding="utf-8", errors="replace")
+        except (AttributeError, ValueError):
+            pass
+
+
 def main(argv: list[str] | None = None) -> None:
+    _force_utf8_io()
     args = build_parser().parse_args(argv)
     try:
         _dispatch(args)
