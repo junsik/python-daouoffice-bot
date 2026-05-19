@@ -30,7 +30,7 @@
 - `DaouBot` — `on_message` 콜백만으로 구동되는 고수준 봇.
 - `RoomRouter` — 방별 allowlist 기본값 디스패치 (`room_id` > `room_type` > 기본값 > 무시).
 - `Profile` + `daoubot` CLI: `login` (`.daoubot/profile.json` 저장), `discover`, `whoami`, `rooms`, `room create/open`, `send`, `start`.
-- 예제: echobot, command, conversation, assistant (독립 LLM 호출), router, error-handler, room-saver (지정/전체 방 메시지를 JSONL로 수집).
+- 예제: echobot, command, conversation, assistant (독립 LLM 호출), router, error-handler, room-saver, archive (지정/전체 방 메시지를 JSONL로 수집).
 - 테스트 스위트 (pytest + respx, 네트워크 mock), ruff lint + format, Python 3.12 / 3.13에서 CI, 다운스트림 타입 체킹용 `py.typed`.
 
 ### 참고
