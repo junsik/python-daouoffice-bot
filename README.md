@@ -56,7 +56,7 @@ daoubot login --base-url https://yourcompany.daouoffice.com
 # → ~/.daoubot/profile.json 저장 (토큰·비밀번호는 화면엔 **** 로만 표시)
 ```
 
-한 호스트에서 여러 봇/테넌트를 쓰려면 `--config <경로>` 로 프로필 파일을 분리합니다 — 옵션은 **서브커맨드 뒤**에 옵니다(`daoubot login --config X ...`, `daoubot rooms --config X`). 형태는 [`profile.example.json`](profile.example.json) 참고(실제 시크릿은 안 들어간 빈 템플릿).
+한 호스트에서 여러 봇/테넌트를 쓰려면 `--config <경로>` 로 프로필 파일을 분리합니다 — 옵션은 **서브커맨드 뒤**에 옵니다(`daoubot login --config X ...`, `daoubot rooms --config X`).
 
 ### 무인(백그라운드) 운영
 
@@ -66,12 +66,12 @@ daoubot login --base-url https://yourcompany.daouoffice.com
 
 | 환경 변수 | 설명 |
 |---|---|
-| `DAOU_BASE_URL` | 테넌트 URL (`https://회사.daouoffice.com`) |
-| `DAOU_COMPANY_ID` | 숫자 회사 id (`daoubot discover`로 조회) |
-| `DAOU_LOGIN_ID` | 봇 계정 로그인 id |
-| `DAOU_PASSWORD` | 봇 계정 비밀번호 (무인 자동 재로그인용) |
+| `DAOU_BASE_URL` | 테넌트 URL (`https://회사.daouoffice.com`) — 로그인 필수 |
+| `DAOU_COMPANY_ID` | 숫자 회사 id — 생략 시 `daoubot discover`(공개 엔드포인트)로 자동 탐색 |
+| `DAOU_LOGIN_ID` | 봇 계정 로그인 id — 로그인 필수 |
+| `DAOU_PASSWORD` | 봇 계정 비밀번호 — 무인 자동 재로그인용. 프로필에 저장되므로 한 번 `daoubot login` 했으면 다시 설정할 필요 없음 |
 
-> LLM은 SDK에 포함돼 있지 않습니다. `bot-assistant` 예제가 핸들러 안에서 OpenAI 호환 API를 호출하는 법을 보여줍니다 (`LLM_BASE_URL`/`LLM_API_KEY`).
+위 4개(`DAOU_` 접두사)가 **SDK가 읽는 환경 변수의 전부**입니다. 개별 예제가 자체적으로 쓰는 변수(LLM 키, 대상 방 id 등)는 각 예제의 docstring 에 적혀 있습니다 — SDK 코어와 무관하므로 여기서 다루지 않습니다.
 
 ## 빠른 시작
 
@@ -217,7 +217,7 @@ skills/daouoffice-bot/  배포용 에이전트 스킬 (SKILL.md + reference.md +
 docs/                   ARCHITECTURE.md (설계 근거) + api/ (역분석 엔드포인트 레퍼런스)
 tools/                  SAZ 캡처 분석 스크립트 (개발용)
 tests/                  pytest (네트워크는 respx로 목)
-profile.example.json    프로필 파일 형태 예시 (시크릿 필드는 빈 값)
+
 ```
 
 ## 개발
