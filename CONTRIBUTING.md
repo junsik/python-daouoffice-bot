@@ -24,7 +24,7 @@ Both must pass; CI runs them on Python 3.12 and 3.13.
 - **Never commit secrets.** No real credentials, tokens, company ids, internal hostnames, or `.saz` captures. Use placeholders. The repo is multi-tenant by design — nothing should be hard-coded to one company.
 - Keep the public API (`daouoffice.__all__`) stable; discuss breaking changes in an issue first.
 - Add or update tests for behavior changes. Network is mocked with `respx`; tests must not hit a live server.
-- This project reverse-engineers an undocumented API. If you map a new endpoint, document it under `docs/` with anonymized samples.
+- This project reverse-engineers an undocumented API. If you map a new endpoint, document it under `docs/api/` with anonymized samples.
 - **Do not hard-wrap Markdown prose.** One paragraph / list item / blockquote = one line; let the renderer wrap. Keep code fences, tables, and mermaid blocks as-is.
 
 ## Reporting security issues

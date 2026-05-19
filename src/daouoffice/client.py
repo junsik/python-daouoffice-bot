@@ -100,7 +100,7 @@ class RoomOpenData(BaseModel):
     backgroundColor: str | None = None
 
 
-# Inline mention token in content.message (see docs/03-messages.md §3.6):
+# Inline mention token in content.message (see docs/api/03-messages.md §3.6):
 #   {{<uuid>::USER::@<name>::<userId>}}   or   {{<uuid>::ALL::@ALL}}
 _MENTION_RE = re.compile(
     r"\{\{[0-9a-fA-F-]+::(?P<type>USER|ALL)::@(?P<name>[^:}]+)(?:::(?P<uid>\d+))?\}\}"

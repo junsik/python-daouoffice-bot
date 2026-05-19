@@ -42,7 +42,7 @@ Grounded in the reverse-engineered docs; each needs a real-traffic check before 
 - **Org directory lookup**: resolve users by name/department (GraphQL / organization tree) so `create_room`/mentions don't require raw numeric ids.
 - **Outbound mentions**: helper to build the `{{uuid::USER::@name::id}}` token so a reply can @-mention someone (inbound parsing already exists).
 - **Message search wrapper**: `/api/chat/search/message` (incl. `mentionTypeList`) — could power an efficient "mentions-only" mode.
-- **Room admin ops**: leave / lock / kick / history-open (documented in `docs/02-chat-room.md`), behind explicit methods.
+- **Room admin ops**: leave / lock / kick / history-open (documented in `docs/api/02-chat-room.md`), behind explicit methods.
 - **Attachments**: *send* is done in 0.1 (`upload_attachment`/`send_file`, SAZ-derived, live-unverified). Remaining: receiving/downloading inbound attachments, and emoticon reactions (`/api/chat/message/emoticon`).
 
 ## 0.4.x — Ergonomics (gated on real demand, not speculation)

@@ -160,7 +160,7 @@ SAZ 캡처 분석으로 확정. 멘션은 **별도 구조 필드가 아니라 `c
 
 `GET /api/chat/search/message?...&mentionTypeList=ALL&mentionTypeList=USER` — "나를 멘션한 메시지" 서버측 검색. 효율적 멘션 전용 폴링에 활용 가능(현재 SDK는 본문 토큰 파싱으로 처리).
 
-> SDK는 이 토큰을 파싱해 `NewMessage.mentions` / `mentions_me` / `mention_all` 로 노출하고, 사람이 읽는 `message_text`(토큰 → `@이름`)와 원본 `raw_text` 를 함께 제공한다. 멘션 게이팅 정책(전원 vs 멘션만)은 노브가 아니라 핸들러/라우터 선언으로 표현한다. 설계 근거는 [ARCHITECTURE.md](ARCHITECTURE.md) 참고.
+> SDK는 이 토큰을 파싱해 `NewMessage.mentions` / `mentions_me` / `mention_all` 로 노출하고, 사람이 읽는 `message_text`(토큰 → `@이름`)와 원본 `raw_text` 를 함께 제공한다. 멘션 게이팅 정책(전원 vs 멘션만)은 노브가 아니라 핸들러/라우터 선언으로 표현한다. 설계 근거는 [ARCHITECTURE.md](../ARCHITECTURE.md) 참고.
 
 ---
 

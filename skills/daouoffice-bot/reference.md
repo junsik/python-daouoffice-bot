@@ -1,6 +1,6 @@
 # Reference — python-daouoffice-bot
 
-Condensed, self-contained API + gotchas for building bots. (Repo docs: `docs/ARCHITECTURE.md`, `docs/0*.md`, `examples/`.)
+Condensed, self-contained API + gotchas for building bots. (Repo docs: `docs/ARCHITECTURE.md`, `docs/api/`, `examples/`.)
 
 ## Public API (`from daouoffice import ...`)
 

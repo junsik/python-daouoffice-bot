@@ -105,13 +105,13 @@ asyncio.run(main())
 
 > 봇 계정은 누구나 아무 방에나 초대할 수 있습니다. 특정 방에서만 동작시키려면 `RoomRouter` 를 쓰세요 — 등록한 방만 처리하고 나머지는 무시합니다(allowlist). `bot = DaouBot(..., on_message=router)`. 예제: `examples/bot-router`.
 
-**멘션:** 다우오피스 멘션은 본문 인라인 토큰입니다(전체 공개, 비공개 아님 — [docs/03-messages.md](docs/03-messages.md) §3.6). SDK가 파싱해 `msg.mentions` / `msg.mentions_me` / `msg.mention_all` 와 사람이 읽는 `message_text`(토큰 → `@이름`), 원본 `raw_text` 를 제공합니다. 바쁜 그룹에서 멘션 시에만 응답하려면 `only_when_mentioned(handler)` 로 감싸세요(글로벌 노브 아님 — 정책은 선언으로).
+**멘션:** 다우오피스 멘션은 본문 인라인 토큰입니다(전체 공개, 비공개 아님 — [docs/api/03-messages.md](docs/api/03-messages.md) §3.6). SDK가 파싱해 `msg.mentions` / `msg.mentions_me` / `msg.mention_all` 와 사람이 읽는 `message_text`(토큰 → `@이름`), 원본 `raw_text` 를 제공합니다. 바쁜 그룹에서 멘션 시에만 응답하려면 `only_when_mentioned(handler)` 로 감싸세요(글로벌 노브 아님 — 정책은 선언으로).
 
 ```python
 bot = DaouBot(..., on_message=only_when_mentioned(handle))
 ```
 
-**파일 첨부 (예: LLM 뉴스레터):** 채팅은 MD/HTML 을 인라인 렌더하지 않습니다. `bot.send_file(room_id, "news.md", "이번 주 뉴스레터")` 로 업로드 → 첨부로 전송(수신자 다운로드). `BotClient.upload_attachment()` + `send_message(..., attachments=[...])` 분해도 가능. 첨부 계약은 SAZ 기반이며 **라이브 미검증**입니다([docs/03-messages.md](docs/03-messages.md) §3.7).
+**파일 첨부 (예: LLM 뉴스레터):** 채팅은 MD/HTML 을 인라인 렌더하지 않습니다. `bot.send_file(room_id, "news.md", "이번 주 뉴스레터")` 로 업로드 → 첨부로 전송(수신자 다운로드). `BotClient.upload_attachment()` + `send_message(..., attachments=[...])` 분해도 가능. 첨부 계약은 SAZ 기반이며 **라이브 미검증**입니다([docs/api/03-messages.md](docs/api/03-messages.md) §3.7).
 
 **재시작 복구:** "어디까지 처리했는지"(방별 마지막 메시지 id)는 기본적으로 `.daoubot/cursors.json` 에 저장됩니다 — 봇이 재시작해도 백로그를 다시 처리하거나 다운타임 메시지를 건너뛰지 않고 이어받습니다. 비영속을 원하면 `DaouBot(..., cursor_store=MemoryCursorStore())`. 단, 폴링 특성상 따라잡기는 방당 최근 ~20개 히스토리 창 안으로 제한됩니다(그보다 오래 다운되면 창 밖 메시지는 복구 불가 — "since id" 엔드포인트가 없음).
 
@@ -205,7 +205,7 @@ npx skills add junsik/python-daouoffice-bot --skill daouoffice-bot
 | `Profile` | `daoubot login` 이 저장하는 프로필 (`load_profile`) |
 | `DaouAuthError` / `DaouConfigError` | 예외 |
 
-전달은 **폴링만** 사용합니다. WebSocket(`GET /ws/pc`, STOMP)은 캡처에서 엔드포인트만 관측됐을 뿐 흐름을 검증하지 못해 **구현하지 않았습니다** (미검증 RE 메모: [docs/04-websocket.md](docs/04-websocket.md)).
+전달은 **폴링만** 사용합니다. WebSocket(`GET /ws/pc`, STOMP)은 캡처에서 엔드포인트만 관측됐을 뿐 흐름을 검증하지 못해 **구현하지 않았습니다** (미검증 RE 메모: [docs/api/04-websocket.md](docs/api/04-websocket.md)).
 
 ## 프로젝트 구조
 
