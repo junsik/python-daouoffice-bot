@@ -206,8 +206,13 @@ class BotEngine:
 
     def _to_message(self, item, room_type: str) -> NewMessage | None:
         sender = item.sender or {}
-        raw = (item.contents or {}).get("message", {}).get("text", "")
-        if not raw:
+        contents = item.contents or {}
+        raw = contents.get("message", {}).get("text", "")
+        attachments = contents.get("attachmentList") or []
+        # Drop only truly empty payloads (system/member-left notices). A
+        # file-only message has empty text but a non-empty attachmentList —
+        # keep it so the attachment is delivered, not silently lost.
+        if not raw and not attachments:
             return None
         clean, mentions, mention_all = parse_mentions(raw)
         return NewMessage(
@@ -222,6 +227,7 @@ class BotEngine:
             mentions=mentions,
             mentions_me=self._client.user_id in mentions,
             mention_all=mention_all,
+            attachments=attachments,
         )
 
     async def _dispatch(self, msg: NewMessage) -> bool:

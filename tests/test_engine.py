@@ -95,6 +95,61 @@ async def test_new_message_dispatched_once() -> None:
 
 
 @pytest.mark.asyncio
+async def test_file_only_message_is_delivered_with_attachments() -> None:
+    """A file-only message has empty text but a non-empty attachmentList —
+    it must reach the handler (regression: it used to be dropped)."""
+    seen: list = []
+
+    async def capture(m):
+        seen.append(m)
+        return None
+
+    client = FakeClient([_msg("USER", "old", 1)])
+    engine = BotEngine(client, capture)
+    await engine._poll_once()  # baseline = 1
+
+    file_item = ChatHistoryItem(
+        chatRoomId="r1",
+        chatMessageId=2,
+        sender={"platformUserId": "USER", "platformUserName": "Tester"},
+        contents={
+            "message": {"text": ""},
+            "attachmentList": [{"fileName": "report.pdf", "fileSize": 123}],
+        },
+    )
+    client.history = [_msg("USER", "old", 1), file_item]
+    await engine._poll_once()
+
+    assert len(seen) == 1
+    assert seen[0].message_text == ""
+    assert seen[0].attachments == [{"fileName": "report.pdf", "fileSize": 123}]
+
+
+@pytest.mark.asyncio
+async def test_truly_empty_message_is_still_dropped() -> None:
+    """No text and no attachments (system/member-left notice) → not delivered."""
+    seen: list = []
+
+    async def capture(m):
+        seen.append(m)
+        return None
+
+    client = FakeClient([_msg("USER", "old", 1)])
+    engine = BotEngine(client, capture)
+    await engine._poll_once()
+
+    empty_item = ChatHistoryItem(
+        chatRoomId="r1",
+        chatMessageId=2,
+        sender={"platformUserId": "USER", "platformUserName": "Tester"},
+        contents={"message": {"text": ""}},
+    )
+    client.history = [_msg("USER", "old", 1), empty_item]
+    await engine._poll_once()
+    assert seen == []
+
+
+@pytest.mark.asyncio
 async def test_skips_own_messages_but_advances_baseline() -> None:
     client = FakeClient([_msg("USER", "old", 1)])
     engine = BotEngine(client, _echo)

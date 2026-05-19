@@ -176,6 +176,10 @@ class NewMessage:
 
     ``message_text`` is human-readable (mention tokens rendered as ``@name``);
     ``raw_text`` keeps the original wire text including ``{{...}}`` tokens.
+
+    ``attachments`` carries the inbound ``attachmentList`` verbatim (each entry
+    has ``filePath``/``fileName``/``fileSize``/``fileType``/...). A file-only
+    message has empty ``message_text`` but a non-empty ``attachments``.
     """
 
     room_id: str
@@ -189,6 +193,7 @@ class NewMessage:
     mentions: list[str] = field(default_factory=list)
     mentions_me: bool = False
     mention_all: bool = False
+    attachments: list[dict] = field(default_factory=list)
 
 
 @dataclass(slots=True)
