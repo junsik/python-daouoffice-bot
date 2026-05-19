@@ -316,6 +316,23 @@ async def test_conversation_content_not_logged_at_info_but_is_at_debug(caplog) -
     assert "another secret" in caplog.text  # visible only when opted into DEBUG
 
 
+@pytest.mark.asyncio
+async def test_read_ack_logged_at_debug_not_info(caplog) -> None:
+    client = FakeClient([_msg("USER", "hi", 1)])
+    engine = BotEngine(client, _echo)
+
+    with caplog.at_level(logging.INFO, logger="daouoffice.engine"):
+        await engine._poll_once()  # first contact → marks read
+    assert "Read ack" not in caplog.text  # per-cycle chatter, not INFO
+    assert client.read == ["1"]  # the ack did happen
+
+    caplog.clear()
+    with caplog.at_level(logging.DEBUG, logger="daouoffice.engine"):
+        client.history = [_msg("USER", "hi", 1), _msg("USER", "more", 2)]
+        await engine._poll_once()
+    assert "Read ack [r1] up to 2" in caplog.text
+
+
 def test_daou_log_level_env_scopes_package_logger_and_validates(monkeypatch) -> None:
     pkg = logging.getLogger("daouoffice")
     prev = pkg.level

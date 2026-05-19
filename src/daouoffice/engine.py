@@ -232,6 +232,9 @@ class BotEngine:
     async def _mark_read(self, message_id, room_id: str) -> None:
         try:
             await asyncio.to_thread(self._client.mark_read, message_id, room_id)
+            # DEBUG (no content, per-cycle chatter — same class as the
+            # reply log); a failure is logged at exception level below.
+            logger.debug("Read ack [%s] up to %s", room_id, message_id)
         except Exception:
             logger.exception("mark_read failed for %s", message_id)
 
