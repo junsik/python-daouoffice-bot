@@ -36,6 +36,7 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import logging
+import os
 import signal
 from collections.abc import Awaitable, Callable
 
@@ -58,12 +59,17 @@ def _build_client(
     company_id: str | None,
     login_id: str | None,
     password: str | None,
+    base_dir: str | os.PathLike[str] | None = None,
 ) -> BotClient:
     """Resolve connection (arg > env > profile) and build a client.
 
     With a password the client re-authenticates on its own (the background
     case); the fresh token is persisted to the profile after every login.
     Without a password it runs on the saved profile token until it expires.
+
+    ``base_dir`` relocates the profile from ``~/.daoubot/`` to
+    ``<base_dir>/.daoubot/`` (read *and* write), so independent instances on
+    one machine can keep separate sessions.
     """
     s = load_settings(
         base_url=base_url,
@@ -71,7 +77,7 @@ def _build_client(
         login_id=login_id,
         password=password,
     )
-    prof = load_profile()
+    prof = load_profile(base_dir)
 
     def _persist(c: BotClient) -> None:
         if c.identity is None:
@@ -87,7 +93,8 @@ def _build_client(
                 name=c.identity.name,
                 access_token=c.access_token,
                 password=c._password or (prof.password if prof else ""),
-            )
+            ),
+            base_dir,
         )
 
     if s.password:
@@ -120,6 +127,11 @@ class DaouBot:
         base_url / company_id / login_id / password: connection overrides;
             normally resolved from the profile (login_id) / env, so a bot is
             just ``DaouBot(on_message=...)``.
+        base_dir: relocate the profile *and* the default cursor store from
+            ``~/.daoubot/`` to ``<base_dir>/.daoubot/``. Give each instance
+            on one machine a different ``base_dir`` to run them concurrently
+            without session/cursor races. Ignored if an explicit
+            ``cursor_store`` is passed.
         on_message: the message handler ``(NewMessage) -> str | None`` (sync
             or async); ``None`` reply = no reply. Omit to only read/mark.
             Pass a :class:`~daouoffice.RoomRouter` for per-room dispatch.
@@ -142,19 +154,21 @@ class DaouBot:
         cursor_store: CursorStore | None = None,
         max_attempts: int = 5,
         client: BotClient | None = None,
+        base_dir: str | os.PathLike[str] | None = None,
     ) -> None:
         self._client = client or _build_client(
             base_url=base_url,
             company_id=company_id,
             login_id=login_id,
             password=password,
+            base_dir=base_dir,
         )
         self._handler = on_message
         self._engine = BotEngine(
             self._client,
             self._invoke_handler,
             poll_interval=poll_interval,
-            cursors=cursor_store or FileCursorStore(),
+            cursors=cursor_store or FileCursorStore(base_dir),
             max_attempts=max_attempts,
         )
 
