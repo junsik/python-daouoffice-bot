@@ -2,7 +2,10 @@
 
 `daoubot login` writes a profile so later commands work without re-auth.
 Stored in ``./.daoubot/profile.json`` (gitignore ``.daoubot/``). The session
-token is saved (file is chmod 600 where supported); the password never is.
+token and password are saved so the bot can re-authenticate unattended; the
+file is chmod 600 where supported and only ever printed via `public_dict()`
+(``****``-masked). Lookup walks up parent directories, so an example run from
+a subfolder still finds the repo-root profile (like git finding ``.git``).
 """
 
 from __future__ import annotations
@@ -50,7 +53,7 @@ def profile_path(
     *,
     path: str | os.PathLike[str] | None = None,
 ) -> Path:
-    """Resolve the profile file.
+    """Resolve where the profile is *written*.
 
     ``path`` (the CLI ``--config`` value) is an explicit file location and
     wins. Otherwise ``<base_dir or cwd>/.daoubot/profile.json``.
@@ -61,13 +64,32 @@ def profile_path(
     return root / PROFILE_DIR / PROFILE_FILE
 
 
+def find_profile(
+    base_dir: str | os.PathLike[str] | None = None,
+) -> Path | None:
+    """Locate an existing profile, searching ``base_dir``/cwd then parents.
+
+    A bot run from ``examples/foo/`` still finds the repo-root profile,
+    matching how git resolves ``.git`` from any subdirectory.
+    """
+    start = Path(base_dir) if base_dir else Path.cwd()
+    for d in (start, *start.parents):
+        fp = d / PROFILE_DIR / PROFILE_FILE
+        if fp.exists():
+            return fp
+    return None
+
+
 def load_profile(
     base_dir: str | os.PathLike[str] | None = None,
     *,
     path: str | os.PathLike[str] | None = None,
 ) -> Profile | None:
-    fp = profile_path(base_dir, path=path)
-    if not fp.exists():
+    if path:
+        fp = Path(path)
+    else:
+        fp = find_profile(base_dir)
+    if not fp or not fp.exists():
         return None
     try:
         data = json.loads(fp.read_text(encoding="utf-8"))
