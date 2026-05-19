@@ -1,14 +1,16 @@
 #!/usr/bin/env python
-"""Room chat saver — append messages from selected rooms to a JSONL file.
+"""Save a room's messages to a JSONL file (one JSON object per line).
 
-This bot never replies; it only records messages. Connection resolves from
-the `daoubot login` profile / DAOU_* env (see bot-echobot / README).
+The bot never replies — it only records. Connection resolves from the
+`daoubot login` profile / DAOU_* env (see bot-echobot / README).
 
-    uv run --with python-daouoffice-bot examples/bot-room-saver/bot.py
+    SAVE_ROOM=11000000001 uv run --with python-daouoffice-bot \\
+        examples/bot-room-saver/bot.py
 
-Optional config:
-    SAVED_ROOM_IDS   comma-separated room ids to save (unset → all rooms)
-    OUTPUT           JSONL output path (default: room-chat.jsonl, appended)
+Config:
+    SAVE_ROOM   room id to collect. Comma-separate for several rooms.
+                Leave unset to save every room the bot sees.
+    OUTPUT      output file (default: messages.jsonl), appended.
 """
 
 from __future__ import annotations
@@ -27,40 +29,31 @@ logging.basicConfig(
 )
 logging.getLogger("httpx").setLevel(logging.WARNING)
 
-OUTPUT = Path(os.getenv("OUTPUT", "room-chat.jsonl"))
-
-
-def _room_filter() -> set[str] | None:
-    """Allowed room ids, or None for "all rooms"."""
-    ids = {r.strip() for r in os.getenv("SAVED_ROOM_IDS", "").split(",") if r.strip()}
-    return ids or None
-
-
-ROOM_FILTER = _room_filter()
+OUTPUT = Path(os.getenv("OUTPUT", "messages.jsonl"))
+SAVE_ROOMS = {r.strip() for r in os.getenv("SAVE_ROOM", "").split(",") if r.strip()}
 
 
 def make_handler(bot: DaouBot):
-    """Skip the bot's own messages (its user id is known after start())."""
-
     async def on_message(msg: NewMessage) -> None:
-        if ROOM_FILTER is not None and msg.room_id not in ROOM_FILTER:
-            return
+        if SAVE_ROOMS and msg.room_id not in SAVE_ROOMS:
+            return  # not a room we collect
         if msg.sender_user_id == bot.client.user_id:
-            return  # don't record our own messages
-        record = {
-            "room_id": msg.room_id,
-            "room_type": msg.room_type,
-            "sender_user_id": msg.sender_user_id,
-            "sender_name": msg.sender_name,
-            "message_id": msg.message_id,
-            "created_at": msg.created_at,
-            "message_text": msg.message_text,
-            "mentions": msg.mentions,
-            "mentions_me": msg.mentions_me,
-            "mention_all": msg.mention_all,
-        }
+            return  # skip the bot's own messages
+        line = json.dumps(
+            {
+                "room_id": msg.room_id,
+                "room_type": msg.room_type,
+                "message_id": msg.message_id,
+                "created_at": msg.created_at,
+                "sender_user_id": msg.sender_user_id,
+                "sender_name": msg.sender_name,
+                "text": msg.message_text,
+                "mentions": msg.mentions,
+            },
+            ensure_ascii=False,
+        )
         with OUTPUT.open("a", encoding="utf-8") as f:
-            f.write(json.dumps(record, ensure_ascii=False) + "\n")
+            f.write(line + "\n")
 
     return on_message
 
@@ -68,11 +61,8 @@ def make_handler(bot: DaouBot):
 async def main() -> None:
     bot = DaouBot()
     bot.set_handler(make_handler(bot))
-    if ROOM_FILTER:
-        logging.info("Saving %d room(s): %s", len(ROOM_FILTER), ", ".join(sorted(ROOM_FILTER)))
-    else:
-        logging.info("Saving ALL rooms.")
-    logging.info("Chat saver ready → %s", OUTPUT)
+    where = ", ".join(sorted(SAVE_ROOMS)) if SAVE_ROOMS else "ALL rooms"
+    logging.info("Saving %s → %s", where, OUTPUT)
     await bot.run_forever()
 
 
