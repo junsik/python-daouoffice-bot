@@ -32,20 +32,22 @@
 
 1. 다우오피스 테넌트 URL — `https://<회사>.daouoffice.com`
 2. 자동화 전용 계정 (관리자 발급)
-3. 테넌트의 숫자 `companyId` — 아래 `daoubot discover`로 조회
+
+(테넌트의 숫자 `companyId` 는 `daoubot login` 이 공개 엔드포인트에서 자동으로 알아내므로 미리 준비할 필요 없습니다 — 필요하면 `--company-id` 로 직접 지정.)
 
 ## 설치
 
-봇 프로젝트의 의존성으로 추가합니다:
-
-```bash
-uv add python-daouoffice-bot          # 또는: pip install python-daouoffice-bot
-```
-
-PyPI에 아직 안 올라온 버전(또는 최신 main)이 필요하면 Git에서 직접:
+아직 PyPI에 게시 전입니다. 봇 프로젝트의 의존성으로 Git에서 직접 추가하세요:
 
 ```bash
 uv add "git+https://github.com/junsik/python-daouoffice-bot"
+# 또는: pip install "git+https://github.com/junsik/python-daouoffice-bot"
+```
+
+특정 릴리스에 고정하려면 태그를 붙입니다:
+
+```bash
+uv add "git+https://github.com/junsik/python-daouoffice-bot@v0.1.0"
 ```
 
 이 저장소 자체를 개발하려면 소스에서:
@@ -79,7 +81,7 @@ daoubot login --base-url https://yourcompany.daouoffice.com
 | 환경 변수 | 설명 |
 |---|---|
 | `DAOU_BASE_URL` | 테넌트 URL (`https://회사.daouoffice.com`) — 로그인 필수 |
-| `DAOU_COMPANY_ID` | 숫자 회사 id — 생략 시 `daoubot discover`(공개 엔드포인트)로 자동 탐색 |
+| `DAOU_COMPANY_ID` | 숫자 회사 id — 생략 시 `daoubot login` 이 공개 엔드포인트로 자동 탐색 |
 | `DAOU_LOGIN_ID` | 봇 계정 로그인 id — 로그인 필수 |
 | `DAOU_PASSWORD` | 봇 계정 비밀번호 — 무인 자동 재로그인용. 프로필에 저장되므로 한 번 `daoubot login` 했으면 다시 설정할 필요 없음 |
 
@@ -129,8 +131,10 @@ bot = DaouBot(..., on_message=only_when_mentioned(handle))
 
 ```bash
 daoubot login ...                      # 인증 + 프로필 저장 (위 참고)
-daoubot discover --base-url <url>      # 회사 id / uuid / 도메인 (인증 불필요)
 daoubot whoami                         # 저장된 봇 신원 출력
+daoubot config                         # 저장된 프로필 보기(시크릿 마스킹)
+daoubot config set base_url <url>      # 연결 항목 수정 (password 는 값 생략 시 숨김 입력)
+daoubot config path                    # 프로필 파일 경로 출력
 daoubot rooms                          # 채팅방 목록 (room id 포함)
 daoubot room create --users a,b --name "Bot Test" [--type GROUP]
 daoubot room open <room_id>            # 방 상세 + 구성원
@@ -191,7 +195,7 @@ npx skills add junsik/python-daouoffice-bot --skill daouoffice-bot
 #개발-알림 방에서 !배포 명령에만 응답하면 돼.
 ```
 
-그러면 스킬이 잡혀서 — (1) 부족한 정보(테넌트·전용 계정·대상 방·트리거·상태·부작용)를 **되묻고**, (2) 결정 매트릭스로 설계를 정한 뒤, (3) `scaffold.py` 로 보일러플레이트를 깔고 핸들러를 구현하고, (4) SDK 불변규칙을 지키며, (5) `daoubot discover`/`login`/`send` 로 라이브 스모크까지 안내합니다. ("스킬 써"라고 명시할 필요 없음 — `다우오피스 봇`/`DaouBot`/`daoubot` 같은 표현이면 발동합니다.)
+그러면 스킬이 잡혀서 — (1) 부족한 정보(테넌트·전용 계정·대상 방·트리거·상태·부작용)를 **되묻고**, (2) 결정 매트릭스로 설계를 정한 뒤, (3) `scaffold.py` 로 보일러플레이트를 깔고 핸들러를 구현하고, (4) SDK 불변규칙을 지키며, (5) `daoubot login`/`send` 로 라이브 스모크까지 안내합니다. ("스킬 써"라고 명시할 필요 없음 — `다우오피스 봇`/`DaouBot`/`daoubot` 같은 표현이면 발동합니다.)
 
 설치 위치별 적용 범위:
 

@@ -24,7 +24,7 @@ Condensed, self-contained API + gotchas for building bots. (Repo docs: `docs/ARC
 
 ## CLI (`daoubot`)
 
-`discover --base-url URL` · `login` · `whoami` · `rooms` · `room create --users a,b [--name N] [--type GROUP]` · `room open <id>` · `send <room_id> "<text>"`. (No `start`: the CLI cannot carry a handler — run the bot as `python bot.py` with `DaouBot(on_message=...)`.) Global `--config <path>` selects an alternate profile file (multi-bot/tenant on one host); default `~/.daoubot/profile.json` (home-anchored, so it works from any directory). Precedence: flag > env > profile. The password is persisted in the profile (chmod 600, gitignored, `****`-masked on stdout) so a daemon re-authenticates unattended; `DAOU_PASSWORD`/an arg still override it.
+`login` (auto-discovers `company_id` when `--company-id` is omitted) · `whoami` · `config [show|set <key> <value>|path]` (view/edit the saved profile; `key` ∈ base_url/company_id/login_id/password) · `rooms` · `room create --users a,b [--name N] [--type GROUP]` · `room open <id>` · `send <room_id> "<text>"`. (No `start`: the CLI cannot carry a handler — run the bot as `python bot.py` with `DaouBot(on_message=...)`. No standalone `discover`: `login` resolves the company id itself.) Global `--config <path>` selects an alternate profile file (multi-bot/tenant on one host); default `~/.daoubot/profile.json` (home-anchored, so it works from any directory). Precedence: flag > env > profile. The password is persisted in the profile (chmod 600, gitignored, `****`-masked on stdout) so a daemon re-authenticates unattended; `DAOU_PASSWORD`/an arg still override it.
 
 ## Gotchas (encode these in any bot you build)
 

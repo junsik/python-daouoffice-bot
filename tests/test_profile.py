@@ -195,6 +195,42 @@ def test_cli_whoami_prints_identity(tmp_path, monkeypatch, capsys) -> None:
     assert out["user_id"] == "42" and out["login_id"] == "acme-bot"
 
 
+def test_cli_config_show_masks_and_set_persists(tmp_path, capsys) -> None:
+    save_profile(
+        Profile(base_url=BASE, login_id="bot", access_token="tok", password="pw"),
+        base_dir=tmp_path,
+    )
+
+    # `config` (no action) → show, secrets masked, no plaintext leak
+    cli_main(["config"])
+    shown = json.loads(capsys.readouterr().out)
+    assert shown["base_url"] == BASE
+    assert shown["access_token"] == "****" and shown["password"] == "****"
+    assert "pw" not in shown.values() and "tok" not in shown.values()
+
+    # `config path` → the profile file location
+    cli_main(["config", "path"])
+    assert "profile.json" in capsys.readouterr().out
+
+    # `config set` persists an editable field
+    cli_main(["config", "set", "company_id", "99999"])
+    capsys.readouterr()
+    assert load_profile(base_dir=tmp_path).company_id == "99999"
+
+
+def test_cli_config_set_password_prompts_when_value_omitted(tmp_path, monkeypatch) -> None:
+    save_profile(Profile(base_url=BASE, login_id="bot"), base_dir=tmp_path)
+    monkeypatch.setattr(cli.sys.stdin, "isatty", lambda: True)
+    monkeypatch.setattr(cli.getpass, "getpass", lambda _p="": "typed-pw")
+    cli_main(["config", "set", "password"])  # no value → hidden prompt
+    assert load_profile(base_dir=tmp_path).password == "typed-pw"
+
+
+def test_cli_config_without_profile_errors(tmp_path) -> None:
+    with pytest.raises(SystemExit):
+        cli_main(["config"])
+
+
 @respx.mock
 def test_cli_auto_relogins_from_saved_password(tmp_path, monkeypatch) -> None:
     monkeypatch.chdir(tmp_path)

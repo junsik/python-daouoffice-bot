@@ -17,7 +17,7 @@ You are designing a bot **to the user's actual requirements** on `python-daouoff
 
 Before writing code, get answers (ask only what's unknown):
 
-1. **Tenant + account**: their `https://<co>.daouoffice.com`, and a **dedicated** automation account (not a human's — read state is account-global). If they lack `company_id`, plan a `daoubot discover`.
+1. **Tenant + account**: their `https://<co>.daouoffice.com`, and a **dedicated** automation account (not a human's — read state is account-global). `company_id` need not be known up front — `daoubot login` auto-resolves it when `--company-id` is omitted.
 2. **Scope**: which rooms? a specific room/list, only 1:1 DMs, or any room it is added to? (drives RoomRouter vs not)
 3. **Trigger**: respond to every message, only `!commands`, only when @-mentioned, on a keyword, or on a schedule/external event (proactive)?
 4. **Logic**: stateless reply, per-room conversation state, or calls an external service / LLM?
@@ -63,8 +63,9 @@ Then implement the handler. Build the bot as `DaouBot(on_message=...)` — it re
 ## Step 5 — Onboard & verify
 
 ```bash
-daoubot discover --base-url https://<co>.daouoffice.com   # find company_id
-daoubot login --base-url ... --login-id <acct> --password '...'
+daoubot login --base-url https://<co>.daouoffice.com --login-id <acct> --password '...'
+                                    # company_id auto-resolved if --company-id omitted
+daoubot config                      # verify the saved profile (secrets masked)
 daoubot rooms                       # get the room ids the design needs
 daoubot send <room_id> "smoke test" # confirm live access BEFORE long-run
 python bot.py

@@ -23,7 +23,7 @@ Telegram/Slack/Discord 는 봇 *플랫폼* 을 준다: 등록 체계(BotFather /
 
 | 일반 봇과의 차이 | 이 SDK의 설계 귀결 |
 |---|---|
-| 등록·토큰 없음 — 봇은 관리자 발급 **일반 계정** | 계정 로그인 인증; GraphQL `me` 로 신원 해석; 토큰 붙여넣기 대신 `daoubot discover`/`login` 온보딩 |
+| 등록·토큰 없음 — 봇은 관리자 발급 **일반 계정** | 계정 로그인 인증; GraphQL `me` 로 신원 해석; 토큰 붙여넣기 대신 `daoubot login` 온보딩 |
 | 방별 설치 없음 — **구성원 = 연결** | "연결" 단계 없음; 대신 `RoomRouter` allowlist 로 끌려 들어간 방 전부에 응답하지 않게 함 |
 | 범위 한정 봇 토큰이 아니라 계정 권한 | **전용 계정** 필수; `mark_read` 가 계정 전역(§6) |
 | 푸시 없음 — 공유 REST를 **폴링** | 방별 커서·at-least-once·재시작 복구를 갖춘 폴링 엔진(§4–5) |
@@ -91,7 +91,7 @@ sequenceDiagram
     end
 ```
 
-`company_id` 는 인증 없이 `/api/portal/public/auth/company`(`data.companyList[0]`)에서 얻을 수 있다. 이 공개 엔드포인트는 인증 쿠키가 없으므로 `X-Referer-Info`(테넌트 호스트) 헤더로 테넌트를 식별한다 — 그래서 클라이언트가 모든 요청에 그 헤더를 붙인다. `daoubot discover`/`login` 온보딩이 이를 사용한다.
+`company_id` 는 인증 없이 `/api/portal/public/auth/company`(`data.companyList[0]`)에서 얻을 수 있다. 이 공개 엔드포인트는 인증 쿠키가 없으므로 `X-Referer-Info`(테넌트 호스트) 헤더로 테넌트를 식별한다 — 그래서 클라이언트가 모든 요청에 그 헤더를 붙인다. `daoubot login` 이 `--company-id` 생략 시 이를 사용해 자동 탐색한다.
 
 ## 4. 폴링 & 커서 흐름
 

@@ -6,6 +6,8 @@ Onboarding flow for SDK developers::
         --login-id my-bot --password '...'        # → saves ~/.daoubot/profile.json
 
     daoubot whoami                                # company + bot identity
+    daoubot config                                # view the saved profile (masked)
+    daoubot config set base_url <url>             # edit a connection field
     daoubot rooms                                 # list rooms (with room ids)
     daoubot room create --users 110...,110... --name "Bot Test"
     daoubot room open <room_id>                   # members + detail
@@ -198,15 +200,40 @@ def cmd_login(args: argparse.Namespace) -> None:
     print(json.dumps(load_profile(path=cfg).public_dict(), indent=2, ensure_ascii=False))
 
 
-def cmd_discover(args: argparse.Namespace) -> None:
-    base_url = _pick(args.base_url, "DAOU_BASE_URL", None)
-    if not base_url:
-        _die("--base-url (or DAOU_BASE_URL) is required")
-    print(f"Querying {base_url} (public, no auth) ...")
-    try:
-        print(json.dumps(BotClient.discover_company(base_url), indent=2, ensure_ascii=False))
-    except Exception as e:
-        _die(f"public company lookup failed: {e}")
+# Profile fields a user may edit by hand. The rest (user_id, company_uuid,
+# company_domain, access_token, saved_at) are resolved/managed by `login`
+# and the daemon — editing them manually would only desync the profile.
+_EDITABLE = ("base_url", "company_id", "login_id", "password")
+
+
+def cmd_config(args: argparse.Namespace) -> None:
+    """View or edit the saved profile (``~/.daoubot/profile.json``)."""
+    cfg = _cfg(args)
+    action = getattr(args, "config_action", None) or "show"
+
+    if action == "path":
+        print(profile_path(path=cfg))
+        return
+
+    prof = load_profile(path=cfg)
+    if prof is None:
+        _die(f"no profile at {profile_path(path=cfg)} — run `daoubot login` first")
+
+    if action == "show":
+        print(json.dumps(prof.public_dict(), indent=2, ensure_ascii=False))
+        return
+
+    # action == "set"
+    key, value = args.key, args.value
+    if value is None:
+        if key == "password" and sys.stdin.isatty():
+            value = getpass.getpass("New password: ")  # keep it out of argv
+        else:
+            _die(f"a value is required: `daoubot config set {key} <value>`")
+    setattr(prof, key, value)
+    save_profile(prof, path=cfg)
+    print(f"updated {key} → {profile_path(path=cfg)}\n")
+    print(json.dumps(prof.public_dict(), indent=2, ensure_ascii=False))
 
 
 def cmd_whoami(args: argparse.Namespace) -> None:
@@ -292,7 +319,6 @@ def build_parser() -> argparse.ArgumentParser:
         return sub.add_parser(name, help=help_text, parents=[common])
 
     add("login", "authenticate and save the profile")
-    add("discover", "look up company id / uuid / domain")
     add("whoami", "print the saved bot identity")
     add("rooms", "list chat rooms with their room ids")
 
@@ -309,6 +335,14 @@ def build_parser() -> argparse.ArgumentParser:
     p_send = add("send", "send a message to a room")
     p_send.add_argument("room_id")
     p_send.add_argument("message")
+
+    p_config = sub.add_parser("config", help="view/edit the saved profile", parents=[common])
+    c_sub = p_config.add_subparsers(dest="config_action")  # default → show
+    c_sub.add_parser("show", help="print the profile (secrets masked)", parents=[common])
+    c_sub.add_parser("path", help="print the profile file path", parents=[common])
+    c_set = c_sub.add_parser("set", help="set a connection field", parents=[common])
+    c_set.add_argument("key", choices=_EDITABLE)
+    c_set.add_argument("value", nargs="?", help="omit for password to be prompted")
     return parser
 
 
@@ -318,10 +352,10 @@ def _dispatch(args: argparse.Namespace) -> None:
         return
     {
         "login": cmd_login,
-        "discover": cmd_discover,
         "whoami": cmd_whoami,
         "rooms": cmd_rooms,
         "send": cmd_send,
+        "config": cmd_config,
     }[args.command](args)
 
 
