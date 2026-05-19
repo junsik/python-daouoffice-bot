@@ -140,7 +140,7 @@ CLI는 온보딩·조회·단발 전송용입니다. **봇 실행은 CLI가 아�
 | 예제 | 설명 |
 |---|---|
 | `bot-echobot` | 받은 메시지를 그대로 반복 |
-| `bot-command` | `!cmd args` 명령 디스패처 (help/echo/whoami) |
+| `bot-command` | `/cmd args` 명령 디스패처 (help/echo/whoami; 접두사는 `BOT_CMD_PREFIX` 로 변경) |
 | `bot-attachment` | `!report` → 그 자리에서 .md 생성해 파일 첨부로 답장 (`send_file`) |
 | `bot-conversation` | 방별 상태 머신 대화 |
 | `bot-assistant` | 핸들러에서 OpenAI 호환 LLM 호출 (LLM_* env 필요) |

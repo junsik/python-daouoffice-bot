@@ -1,19 +1,23 @@
 #!/usr/bin/env python
-"""Command bot — the common `!cmd args` pattern.
+"""Command bot — the common `/cmd args` pattern.
 
-DaouOffice has no slash-command framework, so commands are a text
-convention. Connection resolves from the `daoubot login` profile / DAOU_*
-env (see bot-echobot / README).
+DaouOffice has no slash-command framework (no Telegram-style `/`
+autocomplete), so a command prefix is just a text convention. `/` matches
+Telegram/Slack/Discord; override it with the `BOT_CMD_PREFIX` env var (e.g.
+`!`) — nothing in the SDK cares, the handler only sees `message_text`.
+Connection resolves from the `daoubot login` profile / DAOU_* env (see
+bot-echobot / README).
 
     uv run --with python-daouoffice-bot examples/bot-command/bot.py
 
-In a room: !help / !echo hello / !whoami
+In a room: /help / /echo hello / /whoami
 """
 
 from __future__ import annotations
 
 import asyncio
 import logging
+import os
 from collections.abc import Awaitable, Callable
 
 from daouoffice import DaouBot, NewMessage
@@ -24,7 +28,7 @@ logging.basicConfig(
 )
 logging.getLogger("httpx").setLevel(logging.WARNING)
 
-PREFIX = "!"
+PREFIX = os.environ.get("BOT_CMD_PREFIX", "/")
 Command = Callable[[NewMessage, str], Awaitable[str] | str]
 _commands: dict[str, tuple[str, Command]] = {}
 

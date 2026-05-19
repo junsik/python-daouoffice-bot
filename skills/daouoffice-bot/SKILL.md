@@ -32,7 +32,7 @@ If the user is vague ("make an AI bot"), pick the smallest design that meets the
 | One behavior, any/one room | bare `on_message(msg)->str|None` |
 | Different behavior per room / DM vs group | `RoomRouter` (allowlist: unregistered rooms ignored) |
 | Quiet in busy groups, act only when addressed | wrap handler in `only_when_mentioned(...)` |
-| `!cmd args` commands | parse `msg.message_text` prefix yourself (no command framework exists) |
+| `/cmd args` commands | parse a `msg.message_text` prefix yourself (no command framework; `/` is just convention, pick any) |
 | Conversation state | dict keyed by `msg.room_id` (or external store) |
 | AI answers | call any LLM/API **inside** the handler — SDK bundles none |
 | Proactive/scheduled send | run a separate task using `bot.send_message(room_id, text)`; polling stays for inbound |

@@ -22,7 +22,7 @@
 - 우아한 종료: `run_forever()`이 SIGINT/SIGTERM 핸들러를 설치하고 정상적으로 로그아웃 (systemd 하에서 중요, systemd는 SIGTERM으로 스톱); 시그널 사용 불가 환경에서는 일반 취소로 폴백.
 - 첨부 파일 전송: `BotClient.upload_attachment(path)` + `send_message(..., attachments=[...])`, 단축키 `send_file()` / `DaouBot.send_file()` (예: LLM이 생성한 뉴스레터 .md/.html을 다운로드 가능한 파일로 게시). SAZ에서 디코딩한 2단계 흐름; `docs/api/03-messages.md` §3.7에 문서화됨; 계약은 **미검증**.
 - 에이전트 스킬 (표준 `SKILL.md` 형식, 모든 스킬 호환 런타임으로 이식 가능 — Claude.ai/Claude Code/Agent SDK) `skills/daouoffice-bot/`(SKILL.md + reference.md + scaffold.py) — 배포 가능한 소비자 스킬 (런타임의 스킬 디렉토리, e.g. `~/.claude/skills/`, 또는 `npx skills add`로 설치), 로컬 개발 설정인 `.claude/`에 있지 않음. **디자인 가이드**, 템플릿 메뉴 아님 — 에이전트가 요구사항을 추출하고, 의사결정 매트릭스를 통해 기본값을 매핑하며, SDK의 불변식 하에 봇을 조립 (BotFather/webhooks/inline 없음; polling, allowlist, idempotency, env/profile 설정). `scaffold.py`는 정확한 초기 코드만 생성 (UTF-8는 cp949 Windows에서 안전); 디자인은 에이전트의 것, 사용자의 실제 필요에서.
-- 예제: echobot, command (`!cmd args` 디스패처), attachment (`!report` → 생성한 .md 를 `send_file` 로 첨부 답장), conversation, assistant (독립 LLM 호출), router, error-handler, room-saver (`RoomRouter`로 지정한 방만 JSONL 저장).
+- 예제: echobot, command (`/cmd args` 디스패처, 접두사 `BOT_CMD_PREFIX` 로 변경 가능), attachment (`!report` → 생성한 .md 를 `send_file` 로 첨부 답장), conversation, assistant (독립 LLM 호출), router, error-handler, room-saver (`RoomRouter`로 지정한 방만 JSONL 저장).
 - 아키텍처를 `docs/ARCHITECTURE.md`(다이어그램 포함)에 문서화.
 - 테스트 스위트 (pytest + respx, 네트워크 mock), ruff lint + format, Python 3.12 / 3.13에서 CI, 다운스트림 타입 체킹용 `py.typed`.
 
