@@ -573,8 +573,7 @@ class BotClient:
         aid = attachment.get("attachmentId")
         if aid in (None, "", -1, "-1"):
             raise ValueError(
-                "attachment has no usable attachmentId "
-                f"(got {aid!r}); cannot build a download URL"
+                f"attachment has no usable attachmentId (got {aid!r}); cannot build a download URL"
             )
         return f"{self._base_url}/api/chat/attachment/{aid}/download"
 
@@ -589,15 +588,15 @@ class BotClient:
         """
         aid = attachment.get("attachmentId")
         if aid in (None, "", -1, "-1"):
-            raise ValueError(
-                f"attachment has no usable attachmentId (got {aid!r})"
-            )
+            raise ValueError(f"attachment has no usable attachmentId (got {aid!r})")
         resp = self._api("GET", f"/api/chat/attachment/{aid}/download")
         resp.raise_for_status()
 
-        name = attachment.get("fileName") or _filename_from_disposition(
-            resp.headers.get("content-disposition", "")
-        ) or str(aid)
+        name = (
+            attachment.get("fileName")
+            or _filename_from_disposition(resp.headers.get("content-disposition", ""))
+            or str(aid)
+        )
         target = Path(dest) if dest is not None else Path(name)
         if target.is_dir():
             target = target / name

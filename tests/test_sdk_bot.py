@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from daouoffice import sdk_bot
 from daouoffice.sdk_bot import DaouBot, _build_client
+from daouoffice.state import MemoryCursorStore
 
 
 class _StubClient:
@@ -20,8 +21,6 @@ def test_base_dir_relocates_default_cursor_store(tmp_path) -> None:
 
 
 def test_explicit_cursor_store_overrides_base_dir(tmp_path) -> None:
-    from daouoffice.state import MemoryCursorStore
-
     store = MemoryCursorStore()
     bot = DaouBot(client=_StubClient(), base_dir=tmp_path, cursor_store=store)
     assert bot._engine._cursors is store
@@ -29,14 +28,12 @@ def test_explicit_cursor_store_overrides_base_dir(tmp_path) -> None:
     assert not (tmp_path / ".daoubot" / "cursors.json").exists()
 
 
-def test_build_client_threads_base_dir_into_load_profile(
-    tmp_path, monkeypatch
-) -> None:
+def test_build_client_threads_base_dir_into_load_profile(tmp_path, monkeypatch) -> None:
     seen: list = []
 
     def _spy(base_dir=None, *, path=None):
+        # no saved profile → falls through to password path
         seen.append(base_dir)
-        return None  # no saved profile → falls through to password path
 
     monkeypatch.setattr(sdk_bot, "load_profile", _spy)
     client = _build_client(

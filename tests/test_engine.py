@@ -102,7 +102,6 @@ async def test_file_only_message_is_delivered_with_attachments() -> None:
 
     async def capture(m):
         seen.append(m)
-        return None
 
     client = FakeClient([_msg("USER", "old", 1)])
     engine = BotEngine(client, capture)
@@ -132,7 +131,6 @@ async def test_truly_empty_message_is_still_dropped() -> None:
 
     async def capture(m):
         seen.append(m)
-        return None
 
     client = FakeClient([_msg("USER", "old", 1)])
     engine = BotEngine(client, capture)

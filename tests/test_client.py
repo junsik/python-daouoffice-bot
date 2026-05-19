@@ -199,7 +199,7 @@ def test_download_attachment_writes_file(tmp_path) -> None:
             200,
             content=b"# hello",
             headers={
-                "content-disposition": "attachment; filename=\"x.md\"; "
+                "content-disposition": 'attachment; filename="x.md"; '
                 "filename*=UTF-8''%EB%A9%94%EB%AA%A8.md",
             },
         )
@@ -208,9 +208,7 @@ def test_download_attachment_writes_file(tmp_path) -> None:
     client.login()
 
     # fileName from the attachment entry wins over the header.
-    out = client.download_attachment(
-        {"attachmentId": 999, "fileName": "report.md"}, tmp_path
-    )
+    out = client.download_attachment({"attachmentId": 999, "fileName": "report.md"}, tmp_path)
     assert out == tmp_path / "report.md"
     assert out.read_bytes() == b"# hello"
 
