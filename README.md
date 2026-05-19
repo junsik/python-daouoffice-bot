@@ -62,10 +62,15 @@ uv sync                 # 또는: pip install -e .
 처음 한 번 `login` 하면 회사·사용자 정보와 세션 토큰이 `./.daoubot/profile.json` 에 저장되고(비밀번호는 저장 안 함, `.daoubot/` 는 gitignore), 이후 명령은 자격증명 없이 그 프로필로 동작합니다. `company_id` 를 주지 않으면 공개 엔드포인트로 자동 탐색합니다.
 
 ```bash
-daoubot login --base-url https://yourcompany.daouoffice.com \
-  --login-id my-bot --password '...'
+# --password 를 생략하면 숨김 프롬프트로 안전하게 입력받습니다(권장 —
+# argv·셸 히스토리에 비밀번호가 안 남고, ! 같은 특수문자 인용 문제도 없음):
+daoubot login --base-url https://yourcompany.daouoffice.com --login-id my-bot
 # → .daoubot/profile.json 저장 + 회사/사용자 정보 출력 (토큰은 미출력)
 ```
+
+> 굳이 `--password` 로 넘기거나 `export DAOU_PASSWORD=...` 할 땐 **작은따옴표**로
+> 감싸세요(`'pw!@#'`). bash 는 큰따옴표 안에서도 `!` 를 히스토리 확장해
+> `event not found` 가 납니다. 가장 안전한 건 프롬프트입니다.
 
 설정 우선순위: **명시 인자/CLI 플래그 > 환경 변수 > 프로필 파일** (결정론적 — 충돌이 아니라 우선순위로 해소). 토큰이 만료되면 자격증명이 있을 때 자동 재로그인하고, 없으면 `daoubot login` 을 다시 안내합니다.
 

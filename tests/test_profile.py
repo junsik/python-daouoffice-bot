@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
+import argparse
 import json
 
 import httpx
 import pytest
 import respx
 
+from daouoffice import cli
 from daouoffice.cli import main as cli_main
 from daouoffice.profile import Profile, load_profile, save_profile
 
@@ -157,3 +159,22 @@ def test_cli_rooms_without_profile_errors(tmp_path, monkeypatch) -> None:
     monkeypatch.delenv("DAOU_BASE_URL", raising=False)
     with pytest.raises(SystemExit):
         cli_main(["rooms"])
+
+
+def test_resolve_password_flag_env_prompt(monkeypatch) -> None:
+    monkeypatch.delenv("DAOU_PASSWORD", raising=False)
+    ns = argparse.Namespace(password="p!@#")
+    assert cli._resolve_password(ns) == "p!@#"  # flag wins, special chars fine
+
+    ns = argparse.Namespace(password=None)
+    monkeypatch.setenv("DAOU_PASSWORD", "envpw")
+    assert cli._resolve_password(ns) == "envpw"
+
+    monkeypatch.delenv("DAOU_PASSWORD", raising=False)
+    monkeypatch.setattr(cli.sys.stdin, "isatty", lambda: True)
+    monkeypatch.setattr(cli.getpass, "getpass", lambda _prompt="": "typed-secret")
+    assert cli._resolve_password(argparse.Namespace(password=None)) == "typed-secret"
+
+    # non-TTY, nothing provided → None (caller errors clearly)
+    monkeypatch.setattr(cli.sys.stdin, "isatty", lambda: False)
+    assert cli._resolve_password(argparse.Namespace(password=None)) is None

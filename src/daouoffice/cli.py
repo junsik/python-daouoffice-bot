@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import getpass
 import json
 import os
 import sys
@@ -40,6 +41,20 @@ def _pick(flag: str | None, env: str, prof: str | None) -> str | None:
 def _die(msg: str, code: int = 2) -> None:
     print(f"error: {msg}", file=sys.stderr)
     raise SystemExit(code)
+
+
+def _resolve_password(args: argparse.Namespace) -> str | None:
+    """Password: --password > DAOU_PASSWORD > hidden prompt (if a TTY).
+
+    Prompting avoids putting the secret in argv (visible in `ps` / shell
+    history) and sidesteps shell quoting of special chars like ``!``.
+    """
+    pw = _pick(args.password, "DAOU_PASSWORD", None)
+    if pw:
+        return pw
+    if sys.stdin.isatty():
+        return getpass.getpass("DaouOffice password: ") or None
+    return None
 
 
 def _cfg(args: argparse.Namespace) -> str | None:
@@ -106,9 +121,9 @@ def cmd_login(args: argparse.Namespace) -> None:
     if not base_url:
         _die("--base-url (or DAOU_BASE_URL) is required for login")
     login_id = _pick(args.login_id, "DAOU_LOGIN_ID", None)
-    password = _pick(args.password, "DAOU_PASSWORD", None)
+    password = _resolve_password(args)
     if not (login_id and password):
-        _die("--login-id and --password (or env) are required for login")
+        _die("--login-id and a password (flag/env/prompt) are required for login")
 
     company_id = _pick(args.company_id, "DAOU_COMPANY_ID", None)
     if not company_id:
@@ -196,9 +211,9 @@ def cmd_send(args: argparse.Namespace) -> None:
 def cmd_start(args: argparse.Namespace) -> None:
     prof, base_url, company_id = _settings(args)
     login_id = _pick(args.login_id, "DAOU_LOGIN_ID", prof.login_id if prof else None)
-    password = _pick(args.password, "DAOU_PASSWORD", None)
+    password = _resolve_password(args)
     if not (login_id and password and company_id):
-        _die("`start` needs login_id, password and company_id (flags/env)")
+        _die("`start` needs login_id, a password (flag/env/prompt) and company_id")
     bot = DaouBot(login_id, password, base_url=base_url, company_id=company_id)
     asyncio.run(bot.run_forever())
 
@@ -213,7 +228,10 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--base-url", help="tenant URL (env DAOU_BASE_URL)")
     parser.add_argument("--company-id", help="tenant company id (env DAOU_COMPANY_ID)")
     parser.add_argument("--login-id", help="bot login id (env DAOU_LOGIN_ID)")
-    parser.add_argument("--password", help="bot password (env DAOU_PASSWORD)")
+    parser.add_argument(
+        "--password",
+        help="bot password (env DAOU_PASSWORD; omit to be prompted securely)",
+    )
     sub = parser.add_subparsers(dest="command", required=True)
 
     sub.add_parser("login", help="authenticate and save .daoubot/profile.json")

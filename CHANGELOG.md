@@ -17,6 +17,7 @@ First open-source release. Reverse-engineered from the DaouOffice PC messenger R
 - `load_settings()` + `DaouBot.from_env()` / `BotClient.from_env()`: single resolver (arg > `DAOU_*` env > profile; password never from profile) — a terse shortcut for production/CLI. Examples instead construct `DaouBot` explicitly reading the four `DAOU_*` vars, so required inputs stay visible (no hard-coded secrets, no hidden config).
 - The message-handler argument is `on_message` (was `prompt_func`, which wrongly implied an LLM-prompt coupling); `set_handler()` (was `set_prompt_func`); type `MessageHandler`.
 - Removed the misleading `.env.example` (the SDK never read `.env` — no dotenv). The profile file is the one config file the tool reads/writes; `profile.example.json` shows its shape (non-secret fields only — no password/token), and `daoubot --config <path>` relocates it for multi-bot/tenant hosts. `load_profile`/`save_profile`/`load_settings` take an explicit path.
+- CLI: when `--password`/`DAOU_PASSWORD` is omitted, `login`/`start` prompt for it securely (hidden, via `getpass`) on a TTY — keeps the secret out of argv (`ps`/shell history) and sidesteps shell quoting of `!`/special chars.
 - Graceful shutdown: `run_forever()` installs SIGINT/SIGTERM handlers and logs out cleanly (matters under systemd, which stops with SIGTERM); falls back to plain cancellation where signals are unavailable.
 - Exponential backoff on sustained poll failure (cap 5 min) instead of a flat retry every interval.
 - New `examples/bot-command` (the common `!cmd args` dispatcher pattern).
