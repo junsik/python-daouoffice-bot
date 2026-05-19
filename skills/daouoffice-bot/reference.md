@@ -24,7 +24,7 @@ Condensed, self-contained API + gotchas for building bots. (Repo docs: `docs/ARC
 
 ## CLI (`daoubot`)
 
-`discover --base-url URL` · `login` · `whoami` · `rooms` · `room create --users a,b [--name N] [--type GROUP]` · `room open <id>` · `send <room_id> "<text>"` · `start`. Precedence: flag > env > profile.
+`discover --base-url URL` · `login` · `whoami` · `rooms` · `room create --users a,b [--name N] [--type GROUP]` · `room open <id>` · `send <room_id> "<text>"` · `start`. Global `--config <path>` selects an alternate profile file (multi-bot/tenant on one host); default `./.daoubot/profile.json`. Precedence: flag > env > profile. Password is never written to the profile — env/arg only.
 
 ## Gotchas (encode these in any bot you build)
 

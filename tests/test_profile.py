@@ -29,6 +29,15 @@ def test_missing_profile_returns_none(tmp_path) -> None:
     assert load_profile(base_dir=tmp_path) is None
 
 
+def test_explicit_path_overrides_default(tmp_path) -> None:
+    fp = tmp_path / "bot-a.json"
+    saved = save_profile(Profile(base_url=BASE, login_id="a"), path=fp)
+    assert saved == fp and fp.exists()
+    assert load_profile(path=fp).login_id == "a"
+    # the default location is untouched
+    assert load_profile(base_dir=tmp_path) is None
+
+
 def test_public_dict_hides_token() -> None:
     p = Profile(base_url=BASE, access_token="secret")
     assert "access_token" not in p.public_dict()
@@ -87,6 +96,43 @@ def test_cli_login_writes_profile(tmp_path, monkeypatch, capsys) -> None:
     assert prof.user_id == "42" and prof.access_token == "tok123"
     # token must not be echoed to stdout
     assert "tok123" not in capsys.readouterr().out
+
+
+@respx.mock
+def test_cli_config_path_isolates_profiles(tmp_path, monkeypatch) -> None:
+    monkeypatch.chdir(tmp_path)
+    respx.post("/api/portal/public/auth/login").mock(
+        return_value=httpx.Response(
+            200,
+            json={"code": "SUCCESS-0000"},
+            headers={"set-cookie": "AccessToken=tokA; Path=/"},
+        )
+    )
+    respx.post("/api/portal/graphql").mock(
+        return_value=httpx.Response(
+            200, json={"data": {"me": {"id": 7, "loginId": "a", "company": {"id": 11000}}}}
+        )
+    )
+    cfg = tmp_path / "bot-a.json"
+    cli_main(
+        [
+            "--config",
+            str(cfg),
+            "--base-url",
+            BASE,
+            "--company-id",
+            "11000",
+            "--login-id",
+            "a",
+            "--password",
+            "pw",
+            "login",
+        ]
+    )
+    # written to the --config path, NOT the default ./.daoubot/profile.json
+    assert cfg.exists()
+    assert load_profile(base_dir=tmp_path) is None
+    assert load_profile(path=cfg).user_id == "7"
 
 
 @respx.mock

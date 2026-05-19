@@ -33,13 +33,17 @@ def load_settings(
     login_id: str | None = None,
     password: str | None = None,
     use_profile: bool = True,
+    config_path: str | None = None,
 ) -> Settings:
     """Resolve connection settings (arg > env > profile; password: arg > env).
+
+    ``config_path`` points at an explicit profile file (the CLI ``--config``);
+    otherwise the default ``.daoubot/profile.json`` is used.
 
     Raises:
         DaouConfigError: if ``base_url`` cannot be resolved.
     """
-    prof = load_profile() if use_profile else None
+    prof = load_profile(path=config_path) if use_profile else None
 
     def pick(value: str | None, env: str, prof_value: str) -> str:
         return value or os.getenv(env) or prof_value

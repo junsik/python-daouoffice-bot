@@ -42,9 +42,14 @@ def _die(msg: str, code: int = 2) -> None:
     raise SystemExit(code)
 
 
+def _cfg(args: argparse.Namespace) -> str | None:
+    """The --config profile path, if given."""
+    return getattr(args, "config", None)
+
+
 def _settings(args: argparse.Namespace) -> tuple[Profile | None, str, str | None]:
     """Return (profile, base_url, company_id), erroring if base_url is unknown."""
-    prof = load_profile()
+    prof = load_profile(path=_cfg(args))
     base_url = _pick(args.base_url, "DAOU_BASE_URL", prof.base_url if prof else None)
     if not base_url:
         _die("base_url unknown — pass --base-url, set DAOU_BASE_URL, or run `daoubot login`")
@@ -70,11 +75,11 @@ def _authed_client(args: argparse.Namespace) -> BotClient:
         _die("session expired and no credentials — run `daoubot login` again")
     client = BotClient(login_id, password, base_url=base_url, company_id=company_id)
     client.login()
-    _store(client, base_url)
+    _store(client, base_url, _cfg(args))
     return client
 
 
-def _store(client: BotClient, base_url: str) -> None:
+def _store(client: BotClient, base_url: str, config_path: str | None = None) -> None:
     ident = client.identity
     if ident is None:
         return
@@ -88,7 +93,8 @@ def _store(client: BotClient, base_url: str) -> None:
             user_id=ident.user_id,
             name=ident.name,
             access_token=client.access_token,
-        )
+        ),
+        path=config_path,
     )
 
 
@@ -117,9 +123,10 @@ def cmd_login(args: argparse.Namespace) -> None:
 
     client = BotClient(login_id, password, base_url=base_url, company_id=company_id)
     client.login()
-    _store(client, base_url)
-    print(f"\nsaved → {profile_path()}\n")
-    print(json.dumps(load_profile().public_dict(), indent=2, ensure_ascii=False))
+    cfg = _cfg(args)
+    _store(client, base_url, cfg)
+    print(f"\nsaved → {profile_path(path=cfg)}\n")
+    print(json.dumps(load_profile(path=cfg).public_dict(), indent=2, ensure_ascii=False))
 
 
 def cmd_discover(args: argparse.Namespace) -> None:
@@ -198,6 +205,11 @@ def cmd_start(args: argparse.Namespace) -> None:
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="daoubot", description="DaouOffice bot CLI")
+    parser.add_argument(
+        "--config",
+        help="profile file path (default: ./.daoubot/profile.json); "
+        "use a per-bot/tenant path for multiple accounts on one host",
+    )
     parser.add_argument("--base-url", help="tenant URL (env DAOU_BASE_URL)")
     parser.add_argument("--company-id", help="tenant company id (env DAOU_COMPANY_ID)")
     parser.add_argument("--login-id", help="bot login id (env DAOU_LOGIN_ID)")
