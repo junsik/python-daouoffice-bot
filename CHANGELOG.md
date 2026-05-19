@@ -22,6 +22,12 @@ First open-source release. Reverse-engineered from the DaouOffice PC messenger R
   "unrecognized arguments" — they were on the main parser, which argparse
   won't parse past a subcommand. Moved to a shared parent applied to every
   subcommand, so the documented form works.
+- **Fixed**: `discover_company` (and `daoubot login` auto-discovery) got
+  HTTP 400 from `/api/portal/public/auth/company` — the request was missing
+  the `X-Referer-Info` tenant-host header that this unauthenticated endpoint
+  needs to pick the tenant (present on every such request in the SAZ
+  capture). The client now sends `X-Referer-Info: <base_url host>` on all
+  requests; documented in `docs/api/05-other-api.md`.
 - CLI: when `--password`/`DAOU_PASSWORD` is omitted, `login`/`start` prompt for it securely (hidden, via `getpass`) on a TTY — keeps the secret out of argv (`ps`/shell history) and sidesteps shell quoting of `!`/special chars.
 - Graceful shutdown: `run_forever()` installs SIGINT/SIGTERM handlers and logs out cleanly (matters under systemd, which stops with SIGTERM); falls back to plain cancellation where signals are unavailable.
 - Exponential backoff on sustained poll failure (cap 5 min) instead of a flat retry every interval.

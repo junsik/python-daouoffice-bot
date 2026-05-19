@@ -11,11 +11,16 @@
 }
 ```
 
-### Company 정보 조회
+### Company 정보 조회 (인증 불필요)
 ```
 GET /api/portal/public/auth/company
-Cookie: AccessToken=...
+X-Referer-Info: <테넌트 호스트, 예: yourcompany.daouoffice.com>
 ```
+**`X-Referer-Info` (테넌트 호스트) 헤더 필수.** 이 공개 엔드포인트는 인증
+쿠키가 없으므로 이 헤더로 테넌트를 식별한다 — 없으면 **HTTP 400**. SAZ
+캡처의 모든 요청에 존재. 응답: `{"data":{"companyList":[{companyId,uuid,
+name,clusterInfo}]}}`. (SDK는 모든 요청에 이 헤더를 base_url 호스트로 자동
+부착한다.)
 
 ---
 

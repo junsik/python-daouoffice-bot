@@ -84,7 +84,7 @@ def test_login_failure_raises() -> None:
 @respx.mock
 def test_discover_company_companylist() -> None:
     # Real shape: data.companyList[0].{companyId,uuid,...}
-    respx.get("/api/portal/public/auth/company").mock(
+    route = respx.get("/api/portal/public/auth/company").mock(
         return_value=httpx.Response(
             200,
             json={
@@ -96,6 +96,8 @@ def test_discover_company_companylist() -> None:
     )
     info = BotClient.discover_company(BASE)
     assert info["companyId"] == "11000000000"
+    # Regression: the public endpoint 400s without the tenant host header.
+    assert route.calls.last.request.headers["X-Referer-Info"] == "acme.daouoffice.com"
 
 
 @respx.mock

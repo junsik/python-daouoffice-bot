@@ -22,6 +22,7 @@ import uuid
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
+from urllib.parse import urlparse
 
 import httpx
 from pydantic import BaseModel, ConfigDict
@@ -54,6 +55,19 @@ def _resolve(value: str | None, env: str) -> str | None:
     if value:
         return value
     return os.getenv(env) or None
+
+
+def _default_headers(base_url: str, user_agent: str) -> dict[str, str]:
+    """Headers the DaouOffice server expects.
+
+    ``X-Referer-Info`` is the tenant host; the unauthenticated public
+    endpoints (e.g. ``/api/portal/public/auth/company``) use it to pick the
+    tenant and return **400** without it (observed in the SAZ capture).
+    """
+    return {
+        "User-Agent": user_agent,
+        "X-Referer-Info": urlparse(base_url).hostname or "",
+    }
 
 
 # ============================================================
@@ -214,7 +228,7 @@ class BotClient:
             follow_redirects=True,
             http2=True,
             timeout=timeout,
-            headers={"User-Agent": user_agent},
+            headers=_default_headers(self._base_url, user_agent),
         )
         self.access_token: str = access_token
         self.identity: BotIdentity | None = None
@@ -366,7 +380,7 @@ class BotClient:
             base_url=url,
             follow_redirects=True,
             timeout=timeout,
-            headers={"User-Agent": DEFAULT_USER_AGENT},
+            headers=_default_headers(url, DEFAULT_USER_AGENT),
         ) as client:
             resp = client.get("/api/portal/public/auth/company")
             resp.raise_for_status()
