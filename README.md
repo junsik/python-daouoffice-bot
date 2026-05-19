@@ -36,12 +36,24 @@
 
 ## 설치
 
-아직 PyPI에 게시되지 않았습니다. 소스에서 설치하세요:
+봇 프로젝트의 의존성으로 추가합니다:
+
+```bash
+uv add python-daouoffice-bot          # 또는: pip install python-daouoffice-bot
+```
+
+PyPI에 아직 안 올라온 버전(또는 최신 main)이 필요하면 Git에서 직접:
+
+```bash
+uv add "git+https://github.com/junsik/python-daouoffice-bot"
+```
+
+이 저장소 자체를 개발하려면 소스에서:
 
 ```bash
 git clone https://github.com/junsik/python-daouoffice-bot
 cd python-daouoffice-bot
-uv sync                 # 또는: pip install -e .
+uv sync                 # dev 의존성 포함
 ```
 
 ## 온보딩: `daoubot login` → 프로필
