@@ -43,7 +43,7 @@ Telegram/Slack/Discord 는 봇 *플랫폼* 을 준다: 등록 체계(BotFather /
 ```mermaid
 flowchart TD
     CLI[daoubot CLI] --> BotClient
-    CLI --> Profile["Profile<br/>~/.daoubot/profile.json"]
+    CLI --> Profile["Profile<br/>~/.daoubot/profile.yaml"]
 
     subgraph SDK
         DaouBot -->|소유| BotEngine
@@ -132,10 +132,12 @@ flowchart TD
 
 | 파일 | 작성 주체 | 내용 | 비밀? |
 |---|---|---|---|
-| `profile.json` | `daoubot login` | 테넌트 + 신원 + 세션 토큰 + 비밀번호 | 예 (토큰·비밀번호) |
+| `profile.yaml` | `daoubot login` | 테넌트 + 신원 + 세션 토큰 + RefreshToken + 비밀번호 | 예 (토큰·비밀번호) |
 | `cursors.json` | 엔진(`FileCursorStore`) | `room_id → 마지막 처리 id` | 아니오 |
 
-두 파일 모두 홈 디렉터리의 `~/.daoubot/` 에 놓인다 — 실행 cwd 와 무관(`~/.aws`/`~/.docker` 류 관례)하므로 어느 디렉터리·예제에서 실행하든 같은 로그인·커서를 재사용한다. 비밀번호는 무인 자동 재로그인을 위해 `profile.json` 에 저장된다 — 파일은 `chmod 600`·`.daoubot/` gitignore 이고, 화면에는 `Profile.public_dict()` 가 `****` 로 마스킹한다(`daoubot login` 출력 등). `--config`/`config_path` 로 프로필 경로를 분리해 한 호스트에서 여러 봇/테넌트를 운용한다.
+두 파일 모두 홈 디렉터리의 `~/.daoubot/` 에 놓인다 — 실행 cwd 와 무관(`~/.aws`/`~/.docker` 류 관례)하므로 어느 디렉터리·예제에서 실행하든 같은 로그인·커서를 재사용한다. 비밀번호는 무인 자동 재로그인을 위해 `profile.yaml` 에 저장된다 — 파일은 `chmod 600`·`.daoubot/` gitignore 이고, 화면에는 `Profile.public_dict()` 가 `****` 로 마스킹한다(`daoubot login` 출력 등). `--config`/`config_path` 로 프로필 경로를 분리해 한 호스트에서 여러 봇/테넌트를 운용한다. (이전 `profile.json` 형식이 같은 위치에 있으면 SDK 가 그것도 읽어들이며, 다음 save 부터 yaml 로 재작성한다.)
+
+다운스트림 앱이 자체 YAML(예: dt-agent 의 `agent.yaml`)을 이미 들고 있다면, 그 파일 top-level 에 `daouoffice:` 섹션 하나만 더 두고 SDK 에 `app_config=` / `DAOU_APP_CONFIG` env / `--app-config <path>` 로 가리키면 된다. SDK 는 그 섹션의 `base_url`/`company_id`/`login_id`/`password` 를 **읽기만** 하고 파일에 절대 쓰지 않는다 — 운영자의 주석·다른 섹션은 그대로 보존되고, 회전하는 토큰·identity 는 여전히 `profile.yaml` 이 자동 관리한다(상태와 운영자 설정의 책임 분리).
 
 ## 7. 주요 설계 결정
 

@@ -3,7 +3,7 @@
 Onboarding flow for SDK developers::
 
     daoubot login --base-url https://acme.daouoffice.com \\
-        --login-id my-bot --password '...'        # → saves ~/.daoubot/profile.json
+        --login-id my-bot --password '...'        # → saves ~/.daoubot/profile.yaml
 
     daoubot whoami                                # company + bot identity
     daoubot config                                # view the saved profile (masked)
@@ -18,7 +18,9 @@ The bot itself is a Python program (``DaouBot(on_message=...)`` run as
 ``start`` subcommand; see the README / examples.
 
 After ``login`` the saved session token is reused, so later commands need no
-credentials. Settings precedence: CLI flag > environment variable > profile.
+credentials. Settings precedence: CLI flag > environment variable > app config
+(``--app-config`` / ``DAOU_APP_CONFIG``, the operator's own YAML's
+``daouoffice:`` section, read-only) > profile.
 Connection env vars: DAOU_BASE_URL, DAOU_COMPANY_ID, DAOU_LOGIN_ID, DAOU_PASSWORD.
 """
 
@@ -35,12 +37,33 @@ import httpx
 
 from daouoffice import BotClient
 from daouoffice.client import DaouAuthError, DaouConfigError
+from daouoffice.config import load_app_config
 from daouoffice.profile import Profile, load_profile, profile_path, save_profile
 
 
-def _pick(flag: str | None, env: str, prof: str | None) -> str | None:
-    """Resolve a setting: CLI flag > environment variable > profile."""
-    return flag or os.getenv(env) or (prof or None)
+def _pick(
+    flag: str | None,
+    env: str,
+    prof: str | None,
+    *,
+    app: str | None = None,
+) -> str | None:
+    """Resolve a setting: CLI flag > env > app config > profile.
+
+    The optional ``app`` tier comes from ``--app-config`` / ``DAOU_APP_CONFIG``
+    (an operator-owned YAML's ``daouoffice:`` section). Sites that don't
+    care about that tier just omit the kwarg and behave as before.
+    """
+    return flag or os.getenv(env) or app or (prof or None)
+
+
+def _app(args: argparse.Namespace) -> dict[str, str]:
+    """``daouoffice:`` section of the ``--app-config`` YAML, or ``{}``.
+
+    Cheap to call repeatedly: small file, infrequent CLI invocations.
+    """
+    path = getattr(args, "app_config", None) or os.getenv("DAOU_APP_CONFIG")
+    return load_app_config(path) if path else {}
 
 
 def _die(msg: str, code: int = 2) -> None:
@@ -49,14 +72,14 @@ def _die(msg: str, code: int = 2) -> None:
 
 
 def _resolve_password(args: argparse.Namespace, profile_pw: str | None = None) -> str | None:
-    """Password: --password > DAOU_PASSWORD > saved profile > hidden prompt.
+    """Password: --password > DAOU_PASSWORD > app config > saved profile > hidden prompt.
 
     The profile (chmod 600, gitignored) keeps the password so commands
     re-authenticate unattended when the token expires. Prompting (TTY) is the
     last resort — it keeps the secret out of argv (`ps` / shell history) and
     sidesteps shell quoting of special chars like ``!``.
     """
-    pw = _pick(args.password, "DAOU_PASSWORD", profile_pw)
+    pw = _pick(args.password, "DAOU_PASSWORD", profile_pw, app=_app(args).get("password"))
     if pw:
         return pw
     if sys.stdin.isatty():
@@ -65,8 +88,8 @@ def _resolve_password(args: argparse.Namespace, profile_pw: str | None = None) -
 
 
 def _resolve_login_id(args: argparse.Namespace) -> str | None:
-    """Login id: --login-id > DAOU_LOGIN_ID > visible prompt (TTY only)."""
-    lid = _pick(args.login_id, "DAOU_LOGIN_ID", None)
+    """Login id: --login-id > DAOU_LOGIN_ID > app config > visible prompt (TTY only)."""
+    lid = _pick(args.login_id, "DAOU_LOGIN_ID", None, app=_app(args).get("login_id"))
     if lid:
         return lid
     if sys.stdin.isatty():
@@ -82,10 +105,22 @@ def _cfg(args: argparse.Namespace) -> str | None:
 def _settings(args: argparse.Namespace) -> tuple[Profile | None, str, str | None]:
     """Return (profile, base_url, company_id), erroring if base_url is unknown."""
     prof = load_profile(path=_cfg(args))
-    base_url = _pick(args.base_url, "DAOU_BASE_URL", prof.base_url if prof else None)
+    app = _app(args)
+    base_url = _pick(
+        args.base_url, "DAOU_BASE_URL", prof.base_url if prof else None, app=app.get("base_url")
+    )
     if not base_url:
-        _die("base_url unknown — pass --base-url, set DAOU_BASE_URL, or run `daoubot login`")
-    company_id = _pick(args.company_id, "DAOU_COMPANY_ID", prof.company_id if prof else None)
+        _die(
+            "base_url unknown — pass --base-url, set DAOU_BASE_URL, "
+            "point --app-config / DAOU_APP_CONFIG at a YAML with a "
+            "'daouoffice:' section, or run `daoubot login`"
+        )
+    company_id = _pick(
+        args.company_id,
+        "DAOU_COMPANY_ID",
+        prof.company_id if prof else None,
+        app=app.get("company_id"),
+    )
     return prof, base_url, company_id
 
 
@@ -114,7 +149,12 @@ def _authed_client(args: argparse.Namespace) -> BotClient:
         except (httpx.HTTPError, DaouAuthError):
             print("saved session expired — re-authenticating...", file=sys.stderr)
 
-    login_id = _pick(args.login_id, "DAOU_LOGIN_ID", prof.login_id if prof else None)
+    login_id = _pick(
+        args.login_id,
+        "DAOU_LOGIN_ID",
+        prof.login_id if prof else None,
+        app=_app(args).get("login_id"),
+    )
     password = _resolve_password(args, prof.password if prof else None)
     if not (login_id and company_id):
         _die("no profile found — run `daoubot login` first")
@@ -155,9 +195,10 @@ def _store(client: BotClient, base_url: str, config_path: str | None = None) -> 
 
 
 def cmd_login(args: argparse.Namespace) -> None:
-    base_url = _pick(args.base_url, "DAOU_BASE_URL", None)
+    app = _app(args)
+    base_url = _pick(args.base_url, "DAOU_BASE_URL", None, app=app.get("base_url"))
     if not base_url:
-        _die("--base-url (or DAOU_BASE_URL) is required for login")
+        _die("--base-url (or DAOU_BASE_URL / --app-config) is required for login")
     # Ask for the missing required values in a natural order — login id
     # first, then the password — instead of prompting for the password and
     # only then failing because the login id was never given.
@@ -168,7 +209,7 @@ def cmd_login(args: argparse.Namespace) -> None:
     if not password:
         _die("a password (--password / DAOU_PASSWORD / prompt) is required for login")
 
-    company_id = _pick(args.company_id, "DAOU_COMPANY_ID", None)
+    company_id = _pick(args.company_id, "DAOU_COMPANY_ID", None, app=app.get("company_id"))
     if not company_id:
         print("company_id not given — discovering from public endpoint...")
         try:
@@ -195,7 +236,7 @@ _EDITABLE = ("base_url", "company_id", "login_id", "password")
 
 
 def cmd_config(args: argparse.Namespace) -> None:
-    """View or edit the saved profile (``~/.daoubot/profile.json``)."""
+    """View or edit the saved profile (``~/.daoubot/profile.yaml``)."""
     cfg = _cfg(args)
     action = getattr(args, "config_action", None) or "show"
 
@@ -288,8 +329,15 @@ def build_parser() -> argparse.ArgumentParser:
     common = argparse.ArgumentParser(add_help=False)
     common.add_argument(
         "--config",
-        help="profile file path (default: ~/.daoubot/profile.json); "
+        help="profile file path (default: ~/.daoubot/profile.yaml); "
         "use a per-bot/tenant path for multiple accounts on one host",
+    )
+    common.add_argument(
+        "--app-config",
+        help="operator app config YAML (env DAOU_APP_CONFIG); the SDK reads "
+        "its 'daouoffice:' section for connection values (read-only). Lets a "
+        "downstream app keep base_url/login_id/password alongside its own "
+        "settings in one declarative file instead of `daoubot login`.",
     )
     common.add_argument("--base-url", help="tenant URL (env DAOU_BASE_URL)")
     common.add_argument("--company-id", help="tenant company id (env DAOU_COMPANY_ID)")

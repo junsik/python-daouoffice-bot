@@ -17,7 +17,8 @@ SKELETON = '''#!/usr/bin/env python
 """DaouOffice bot.
 
 Connection (tenant URL, account, password) is resolved by the SDK in this
-order — explicit argument > DAOU_* env > ~/.daoubot/profile.json. Run
+order — explicit argument > DAOU_* env > app config YAML's daouoffice:
+section (DAOU_APP_CONFIG/app_config=) > ~/.daoubot/profile.yaml. Run
 `daoubot login` once first so the profile is populated; after that this
 script needs no env or args. To override on a host (e.g. systemd
 EnvironmentFile), set DAOU_BASE_URL / DAOU_COMPANY_ID / DAOU_LOGIN_ID /

@@ -65,14 +65,14 @@ uv sync                 # dev 의존성 포함
 
 ## 온보딩: `daoubot login` → 프로필
 
-봇은 백그라운드 데몬입니다. 처음 한 번 로그인하면 회사·사용자 정보, 세션 토큰, **비밀번호**가 `~/.daoubot/profile.json`(홈 디렉터리, 실행 위치 무관 — `~/.aws`/`~/.docker` 와 같은 방식)에 저장되고, 이후 코드/명령은 어느 디렉터리에서 실행하든 그 프로필을 자동으로 씁니다. 데몬이 무인 자동 재로그인하려면 비밀번호가 필요하므로 저장하는 것이며 — 파일은 `chmod 600`·`.daoubot/` gitignore, 화면 출력 시에는 항상 `****` 로 마스킹합니다. `company_id` 를 안 주면 공개 엔드포인트로 자동 탐색합니다.
+봇은 백그라운드 데몬입니다. 처음 한 번 로그인하면 회사·사용자 정보, 세션 토큰, **비밀번호**가 `~/.daoubot/profile.yaml`(홈 디렉터리, 실행 위치 무관 — `~/.aws`/`~/.docker` 와 같은 방식)에 저장되고, 이후 코드/명령은 어느 디렉터리에서 실행하든 그 프로필을 자동으로 씁니다. 데몬이 무인 자동 재로그인하려면 비밀번호가 필요하므로 저장하는 것이며 — 파일은 `chmod 600`·`.daoubot/` gitignore, 화면 출력 시에는 항상 `****` 로 마스킹합니다. `company_id` 를 안 주면 공개 엔드포인트로 자동 탐색합니다.
 
 ```bash
 # --login-id 를 생략하면 로그인 id 를, --password 를 생략하면 비밀번호를
 # (이 순서로) 프롬프트로 입력받습니다 — 비밀번호는 숨김 입력이라 argv·셸
 # 히스토리에 안 남고, ! 같은 특수문자 인용 문제도 없습니다:
 daoubot login --base-url https://yourcompany.daouoffice.com
-# → ~/.daoubot/profile.json 저장 (토큰·비밀번호는 화면엔 **** 로만 표시)
+# → ~/.daoubot/profile.yaml 저장 (토큰·비밀번호는 화면엔 **** 로만 표시)
 ```
 
 한 호스트에서 여러 봇/테넌트를 쓰려면 `--config <경로>` 로 프로필 파일을 분리합니다 — 옵션은 **서브커맨드 뒤**에 옵니다(`daoubot login --config X ...`, `daoubot rooms --config X`).
@@ -81,7 +81,7 @@ daoubot login --base-url https://yourcompany.daouoffice.com
 
 AccessToken 은 약 30분 뒤 만료됩니다. `daoubot login` 한 번이면 30일짜리 RefreshToken 과 비밀번호가 프로필에 함께 저장돼, 봇/CLI 는 401 을 받으면 **(1) RefreshToken 으로 새 AccessToken 만 빠르게 발급**받고, 그게 실패할 때만 **(2) 비밀번호로 풀 재로그인**합니다 — 새 토큰은 프로필에 다시 씁니다. 추가 설정 없이 무인 운영됩니다. (`DAOU_PASSWORD` 환경 변수로 오버라이드 가능, 예: systemd `EnvironmentFile`.) RefreshToken 도 비밀번호도 전혀 없을 때만 만료 시 명확한 에러로 멈춥니다(사용자에게 재로그인을 강요하지 않음).
 
-모든 연결값(비밀번호 포함)은 **명시 인자 > `DAOU_*` 환경 변수 > 프로필** 순으로 해석됩니다. SDK는 `.env` 파일을 자동으로 읽지 않으니, 환경 변수로 오버라이드하려면 셸에 직접 export 하거나 systemd EnvironmentFile 을 쓰세요.
+모든 연결값(비밀번호 포함)은 **명시 인자 > `DAOU_*` 환경 변수 > 앱 설정(`DAOU_APP_CONFIG`) > 프로필** 순으로 해석됩니다. SDK는 `.env` 파일을 자동으로 읽지 않으니, 환경 변수로 오버라이드하려면 셸에 직접 export 하거나 systemd EnvironmentFile 을 쓰세요. 다운스트림 앱(예: dt-agent)이 자기 `agent.yaml` 의 `daouoffice:` 섹션에 연결값을 선언하면 SDK 가 그걸 **읽기 전용**으로 사용합니다 — 토큰·identity 는 여전히 프로필이 관리(파일 분리).
 
 | 환경 변수 | 설명 |
 |---|---|
@@ -89,9 +89,26 @@ AccessToken 은 약 30분 뒤 만료됩니다. `daoubot login` 한 번이면 30�
 | `DAOU_COMPANY_ID` | 숫자 회사 id — 생략 시 `daoubot login` 이 공개 엔드포인트로 자동 탐색 |
 | `DAOU_LOGIN_ID` | 봇 계정 로그인 id — 로그인 필수 |
 | `DAOU_PASSWORD` | 봇 계정 비밀번호 — 무인 자동 재로그인용. 프로필에 저장되므로 한 번 `daoubot login` 했으면 다시 설정할 필요 없음 |
+| `DAOU_APP_CONFIG` | 다운스트림 앱의 YAML 경로(예: `agent.yaml`). 그 파일의 top-level `daouoffice:` 섹션에서 `base_url`/`company_id`/`login_id`/`password` 를 **읽기만** 함. SDK 가 그 파일에 절대 쓰지 않음 — 토큰·identity 는 프로필이 따로 관리. 정밀도 위 4개 사이 (env 보다 아래, 프로필 보다 위). CLI 는 `--app-config <path>` 로도 가능 |
 | `DAOU_LOG_LEVEL` | `daouoffice` 패키지 로거 레벨(`DEBUG`/`INFO`/`WARNING`/…). 연결값 아님. 미설정 시 앱 로깅 설정을 따름(라이브러리는 root/basicConfig 를 건드리지 않음). 메시지 본문·발신자 로그는 기본적으로 `DEBUG` 라 기본 `INFO` 에서는 **대화 내용이 로깅되지 않음** — 진단 시 `DEBUG` 로 켜고, 더 조용히 하려면 `WARNING` |
 
-위 5개(`DAOU_` 접두사)가 **SDK가 읽는 환경 변수의 전부**입니다. 개별 예제가 자체적으로 쓰는 변수(LLM 키, 대상 방 id 등)는 각 예제의 docstring 에 적혀 있습니다 — SDK 코어와 무관하므로 여기서 다루지 않습니다.
+위 6개(`DAOU_` 접두사)가 **SDK가 읽는 환경 변수의 전부**입니다. 개별 예제가 자체적으로 쓰는 변수(LLM 키, 대상 방 id 등)는 각 예제의 docstring 에 적혀 있습니다 — SDK 코어와 무관하므로 여기서 다루지 않습니다.
+
+**다운스트림 앱과의 통합 (예: dt-agent의 `agent.yaml`)**: 앱이 이미 자기 설정 YAML 을 들고 있으면, 거기에 `daouoffice:` 섹션 하나 더 붙이고 SDK 에 그 파일을 가리키면 됩니다. SDK 는 읽기만 하므로 앱이 자기 파일 포맷·주석을 그대로 유지합니다. 토큰/identity 는 여전히 `~/.daoubot/profile.yaml` (또는 `--config` 지정 경로) 에 SDK 가 자동 관리.
+
+```yaml
+# agent.yaml (앱이 들고 있는 기존 파일)
+daouoffice:
+  base_url: https://yourcompany.daouoffice.com
+  login_id: yourbot
+  password: <비밀번호>      # 또는 DAOU_PASSWORD env 로(env 가 더 우선)
+  # company_id 는 생략 가능 (자동 탐색)
+```
+
+```python
+bot = DaouBot(on_message=on_message, app_config="agent.yaml")
+# 또는 환경변수: DAOU_APP_CONFIG=/etc/myapp/agent.yaml python bot.py
+```
 
 ## 빠른 시작
 

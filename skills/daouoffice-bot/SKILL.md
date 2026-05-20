@@ -51,8 +51,28 @@ Compose these — they are orthogonal (e.g. `RoomRouter` whose group handler is 
 
 Two layers, kept separate:
 
-- **SDK connection** (`base_url`, `company_id`, `login_id`, `password`) — resolved by the SDK in this order: **explicit argument > `DAOU_*` env > `~/.daoubot/profile.json`** (written by `daoubot login`). Your bot code never re-implements this; `DaouBot(on_message=...)` and the SDK does it. The `DAOU_*` family is for connection only — don't repurpose those names for bot config.
+- **SDK connection** (`base_url`, `company_id`, `login_id`, `password`) — resolved in this order: **explicit argument > `DAOU_*` env > app config YAML's `daouoffice:` section > `~/.daoubot/profile.yaml`** (written by `daoubot login`). Your bot code never re-implements this. The `DAOU_*` family is for connection only — don't repurpose those names for bot config.
 - **Bot behavior** (which rooms are allowed, command prefix, LLM keys, feature flags) — yours to name and layer. Pick env names that fit the bot (`ROOM_ALLOW`, `BOT_CMD_PREFIX`, `LLM_API_KEY`, …); `examples/bot-router` shows the env-conditional registration pattern. A sensible layering is **arg > env > YAML/JSON file > default**; never commit secrets or tenant identifiers.
+
+**Embedding the SDK in a downstream app's config (e.g. an `agent.yaml`).** If the app already maintains its own declarative YAML (a single edited file deployed as an artifact), point the SDK at it instead of running `daoubot login`:
+
+```yaml
+# agent.yaml — the app's own config; add one section for the SDK
+daouoffice:
+  base_url: https://yourcompany.daouoffice.com
+  login_id: yourbot
+  password: <literal or set DAOU_PASSWORD env to override>
+  # company_id omitted → SDK auto-discovers it on first call
+# ... the app's other sections stay untouched (the SDK only reads, never writes)
+```
+
+```python
+bot = DaouBot(on_message=on_message, app_config="agent.yaml")
+# or via env:   DAOU_APP_CONFIG=/path/to/agent.yaml python bot.py
+# or per-CLI:   daoubot --app-config /path/to/agent.yaml rooms
+```
+
+The SDK reads only the `daouoffice:` section, only on each call — it never writes back. Tokens and identity stay in `~/.daoubot/profile.yaml` (or wherever `--config` points), so the operator's commented YAML stays intact and rotating secrets stay out of the deploy artifact. Values are literal — `${ENV}` substitution is the operator's app concern, not the SDK's; if env injection is wanted, just set `DAOU_PASSWORD` etc., which override the file anyway.
 
 ## Step 3 — Assemble (start from the skeleton, then build)
 
@@ -62,7 +82,7 @@ Two layers, kept separate:
 python skills/daouoffice-bot/scripts/scaffold.py > bot.py   # path: where the skill is installed
 ```
 
-Then implement the handler. Build the bot as `DaouBot(on_message=...)` — it resolves connection from the operator's `daoubot login` profile (or `DAOU_*` env / explicit args; precedence arg > env > profile). Never put credentials or a tenant URL in the bot code. The user runs `daoubot login` once first — that persists the password in `~/.daoubot/profile.json` (chmod 600, gitignored, home-anchored so it works from any directory), so the daemon re-authenticates unattended with no extra config. `DAOU_PASSWORD` is only an optional override. Read room ids from env/args too.
+Then implement the handler. Build the bot as `DaouBot(on_message=...)` — it resolves connection from the operator's `daoubot login` profile (or `DAOU_*` env / app config / explicit args; precedence arg > env > app config > profile, see Step 2.5). Never put credentials or a tenant URL in the bot code. The simplest setup is `daoubot login` once: that persists the password in `~/.daoubot/profile.yaml` (chmod 600, gitignored, home-anchored so it works from any directory), so the daemon re-authenticates unattended with no extra config. `DAOU_PASSWORD` is only an optional override. Read room ids from env/args too.
 
 ## Step 4 — Invariants you MUST keep (the SDK's hard rules)
 

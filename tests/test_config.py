@@ -70,3 +70,78 @@ def test_daoubot_resolves_from_env(monkeypatch) -> None:
     monkeypatch.setenv("DAOU_PASSWORD", "pw")
     bot = DaouBot(on_message=lambda m: None)
     assert bot.client._base_url == "https://acme.daouoffice.com"
+
+
+# -- app config tier --------------------------------------------------------
+
+
+def _write_app_config(path, **daouoffice_fields):
+    """Write a minimal operator YAML with a ``daouoffice:`` section."""
+    lines = ["daouoffice:"]
+    for k, v in daouoffice_fields.items():
+        lines.append(f"  {k}: {v}")
+    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
+def test_app_config_provides_connection_values(tmp_path) -> None:
+    cfg = tmp_path / "agent.yaml"
+    _write_app_config(cfg, base_url="https://acme.daouoffice.com", login_id="bot", password="pw")
+    s = load_settings(app_config=cfg)
+    assert s.base_url == "https://acme.daouoffice.com"
+    assert s.login_id == "bot"
+    assert s.password == "pw"
+
+
+def test_app_config_path_from_env(tmp_path, monkeypatch) -> None:
+    cfg = tmp_path / "agent.yaml"
+    _write_app_config(cfg, base_url="https://acme.daouoffice.com", login_id="bot")
+    monkeypatch.setenv("DAOU_APP_CONFIG", str(cfg))
+    assert load_settings().base_url == "https://acme.daouoffice.com"
+
+
+def test_app_config_loses_to_env_but_beats_profile(tmp_path, monkeypatch) -> None:
+    save_profile(
+        Profile(base_url="https://from-profile.daouoffice.com", login_id="prof-bot"),
+        base_dir=tmp_path,
+    )
+    cfg = tmp_path / "agent.yaml"
+    _write_app_config(cfg, base_url="https://from-app.daouoffice.com", login_id="app-bot")
+    # Profile says "from-profile", app config says "from-app" → app wins.
+    s = load_settings(app_config=cfg)
+    assert s.base_url == "https://from-app.daouoffice.com"
+    assert s.login_id == "app-bot"
+    # But env overrides app config.
+    monkeypatch.setenv("DAOU_BASE_URL", "https://from-env.daouoffice.com")
+    assert load_settings(app_config=cfg).base_url == "https://from-env.daouoffice.com"
+
+
+def test_app_config_missing_file_is_silent(tmp_path) -> None:
+    # Operator pointed at a non-existent file: don't fail loud here — the
+    # other tiers may still satisfy the resolution. Just behave as no app
+    # config given. (Malformed YAML *is* loud — operator error.)
+    save_profile(Profile(base_url="https://acme.daouoffice.com"), base_dir=tmp_path)
+    s = load_settings(app_config=tmp_path / "missing.yaml")
+    assert s.base_url == "https://acme.daouoffice.com"
+
+
+def test_app_config_malformed_yaml_raises(tmp_path) -> None:
+    cfg = tmp_path / "agent.yaml"
+    cfg.write_text("daouoffice: [unterminated", encoding="utf-8")
+    with pytest.raises(DaouConfigError, match="invalid YAML"):
+        load_settings(app_config=cfg)
+
+
+def test_app_config_no_daouoffice_section_is_empty(tmp_path) -> None:
+    # A YAML that exists but has no daouoffice: section should not satisfy
+    # the resolution; missing base_url propagates as the usual error.
+    cfg = tmp_path / "agent.yaml"
+    cfg.write_text("other:\n  key: value\n", encoding="utf-8")
+    with pytest.raises(DaouConfigError, match="base_url"):
+        load_settings(app_config=cfg)
+
+
+def test_app_config_bad_section_type_raises(tmp_path) -> None:
+    cfg = tmp_path / "agent.yaml"
+    cfg.write_text("daouoffice: not-a-mapping\n", encoding="utf-8")
+    with pytest.raises(DaouConfigError, match="must be a mapping"):
+        load_settings(app_config=cfg)

@@ -208,9 +208,9 @@ def test_cli_config_show_masks_and_set_persists(tmp_path, capsys) -> None:
     assert shown["access_token"] == "****" and shown["password"] == "****"
     assert "pw" not in shown.values() and "tok" not in shown.values()
 
-    # `config path` → the profile file location
+    # `config path` → the profile file location (YAML form)
     cli_main(["config", "path"])
-    assert "profile.json" in capsys.readouterr().out
+    assert "profile.yaml" in capsys.readouterr().out
 
     # `config set` persists an editable field
     cli_main(["config", "set", "company_id", "99999"])

@@ -1,7 +1,7 @@
 """DaouOffice Messenger SDK — high-level :class:`DaouBot`.
 
 A bot is a background daemon. Onboard once with ``daoubot login`` (writes
-``~/.daoubot/profile.json`` — tenant, identity, session token and the
+``~/.daoubot/profile.yaml`` — tenant, identity, session token and the
 password, so it re-authenticates unattended). Then the bot just runs:
 
     import asyncio
@@ -13,7 +13,7 @@ password, so it re-authenticates unattended). Then the bot just runs:
         return None
 
     async def main():
-        bot = DaouBot(on_message=on_message)   # resolves from profile.json
+        bot = DaouBot(on_message=on_message)   # resolves from profile.yaml
         await bot.run_forever()
 
     asyncio.run(main())
@@ -60,8 +60,9 @@ def _build_client(
     login_id: str | None,
     password: str | None,
     base_dir: str | os.PathLike[str] | None = None,
+    app_config: str | os.PathLike[str] | None = None,
 ) -> BotClient:
-    """Resolve connection (arg > env > profile) and build a client.
+    """Resolve connection (arg > env > app config > profile) and build a client.
 
     With a password the client re-authenticates on its own (the background
     case); the fresh token is persisted to the profile after every login.
@@ -69,13 +70,18 @@ def _build_client(
 
     ``base_dir`` relocates the profile from ``~/.daoubot/`` to
     ``<base_dir>/.daoubot/`` (read *and* write), so independent instances on
-    one machine can keep separate sessions.
+    one machine can keep separate sessions. ``app_config`` (or
+    ``DAOU_APP_CONFIG`` env) points at an operator YAML whose
+    ``daouoffice:`` section provides connection values — the SDK reads it
+    only, never writes back, so the operator's commented file stays intact
+    and SDK-managed tokens stay in the profile.
     """
     s = load_settings(
         base_url=base_url,
         company_id=company_id,
         login_id=login_id,
         password=password,
+        app_config=app_config,
     )
     prof = load_profile(base_dir)
 
@@ -124,15 +130,23 @@ class DaouBot:
     """High-level DaouOffice messenger bot (background daemon).
 
     All connection settings (including the password) resolve from
-    ``daoubot login``'s ``~/.daoubot/profile.json``, overridable by an
-    explicit argument or a ``DAOU_*`` environment variable (precedence:
-    argument > env > profile). The persisted password lets the daemon
-    re-authenticate unattended when the token expires.
+    ``daoubot login``'s ``~/.daoubot/profile.yaml``, overridable by an
+    explicit argument, a ``DAOU_*`` environment variable, or an operator
+    app config (``app_config``/``DAOU_APP_CONFIG``). Precedence:
+    argument > env > app config > profile. The persisted password lets
+    the daemon re-authenticate unattended when the token expires.
 
     Args:
         base_url / company_id / login_id / password: connection overrides;
             normally resolved from the profile (login_id) / env, so a bot is
             just ``DaouBot(on_message=...)``.
+        app_config: path to an operator YAML whose ``daouoffice:`` section
+            provides connection values (``base_url`` / ``company_id`` /
+            ``login_id`` / ``password``) — read-only, never overwritten by
+            the SDK, so an app's own commented config file (e.g. an
+            ``agent.yaml``) can carry the SDK connection alongside its own
+            settings without ``daoubot login``. Also picked up from the
+            ``DAOU_APP_CONFIG`` env var.
         base_dir: relocate the profile *and* the default cursor store from
             ``~/.daoubot/`` to ``<base_dir>/.daoubot/``. Give each instance
             on one machine a different ``base_dir`` to run them concurrently
@@ -165,6 +179,7 @@ class DaouBot:
         markdown: bool = False,
         client: BotClient | None = None,
         base_dir: str | os.PathLike[str] | None = None,
+        app_config: str | os.PathLike[str] | None = None,
     ) -> None:
         self._client = client or _build_client(
             base_url=base_url,
@@ -172,6 +187,7 @@ class DaouBot:
             login_id=login_id,
             password=password,
             base_dir=base_dir,
+            app_config=app_config,
         )
         self._handler = on_message
         self._engine = BotEngine(

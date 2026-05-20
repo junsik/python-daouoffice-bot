@@ -6,15 +6,16 @@ Condensed, self-contained API + gotchas for building bots. (Repo docs: `docs/ARC
 
 | Symbol | Purpose |
 |---|---|
-| `DaouBot` | High-level bot. `DaouBot(on_message=..., *, markdown=False)` resolves connection from a `daoubot login` profile / `DAOU_*` env (arg > env > profile). `markdown=True` renders each reply's Markdown into the chat-HTML subset before sending (see gotcha 9). `run_forever()` = login + poll + graceful SIGINT/SIGTERM. The daemon recovers itself on 401 — RefreshToken first, then full re-login (see gotcha 5). |
+| `DaouBot` | High-level bot. `DaouBot(on_message=..., *, markdown=False, app_config=None)` resolves connection in this order: explicit arg > `DAOU_*` env > app config YAML's `daouoffice:` section (read-only, via `app_config=` or `DAOU_APP_CONFIG` env — for embedding the SDK in a downstream app's own config file) > saved profile. `markdown=True` renders each reply's Markdown into the chat-HTML subset before sending (see gotcha 9). `run_forever()` = login + poll + graceful SIGINT/SIGTERM. The daemon recovers itself on 401 — RefreshToken first, then full re-login (see gotcha 5). |
 | `BotClient` | REST wrapper: `login()`, `whoami()`, `discover_company()`, `get_rooms()`, `create_room()`, `open_room()`, `send_message(room, content="", *, attachments=[...], reply_to=None)`, `upload_attachment(path)`, `send_file(room, path, content="")`, `get_chat_history()`, `mark_read(message_id, room_id)`. `from_token(..., refresh_token=...)`. |
 | `to_chat_html(text)` | Markdown → chat-HTML subset converter (bold, italic, links, ordered/bullet lists, line breaks). Exposed for manual rendering; `DaouBot(markdown=True)` calls it automatically on each handler reply. |
 | `BotEngine` | Polling engine (used internally by `DaouBot`). |
 | `NewMessage` | Inbound message (see fields below). |
 | `RoomRouter` | Per-room handler dispatch; **allowlist** — unregistered rooms ignored. `add_room(id, fn)`, `add_room_type("SINGLE"/"GROUP", fn)`, `set_default(fn)`, decorators `@router.room(id)` / `@router.room_type(t)` / `@router.default`. Pass the router as `on_message`. |
 | `only_when_mentioned(fn, *, include_all=True)` | Wrap a handler so it runs only when `mentions_me` (or `@ALL`). Composable with `on_message` or a router handler. |
-| `load_settings(...)` / `Settings` | Resolve base_url/company_id/login_id/password: arg > `DAOU_*` env > profile (password included, so a daemon re-auths unattended). |
-| `Profile` / `load_profile` / `save_profile` | `~/.daoubot/profile.json` model (home-anchored, cwd-independent). |
+| `load_settings(...)` / `Settings` | Resolve base_url/company_id/login_id/password: arg > `DAOU_*` env > app config YAML's `daouoffice:` section > profile (password included, so a daemon re-auths unattended). |
+| `load_app_config(path)` | Read the operator app config's top-level `daouoffice:` section as a dict. Missing file → empty; malformed/non-mapping → `DaouConfigError`. |
+| `Profile` / `load_profile` / `save_profile` | `~/.daoubot/profile.yaml` model (home-anchored, cwd-independent). Legacy `profile.json` is read transparently on first load and rewritten as YAML on the next save. |
 | `FileCursorStore` / `MemoryCursorStore` / `CursorStore` | Where "processed up to" is persisted. `DaouBot` defaults to `FileCursorStore` (restart-resume). |
 | `BotIdentity` | Resolved bot identity (user_id, company_*). |
 | `DaouAuthError` / `DaouConfigError` | Exceptions. |
@@ -25,7 +26,13 @@ Condensed, self-contained API + gotchas for building bots. (Repo docs: `docs/ARC
 
 ## CLI (`daoubot`)
 
-`login` (auto-discovers `company_id` when `--company-id` is omitted) · `whoami` · `config [show|set <key> <value>|path]` (view/edit the saved profile; `key` ∈ base_url/company_id/login_id/password) · `rooms` · `room create --users a,b [--name N] [--type GROUP]` · `room open <id>` · `send <room_id> "<text>"`. (No `start`: the CLI cannot carry a handler — run the bot as `python bot.py` with `DaouBot(on_message=...)`. No standalone `discover`: `login` resolves the company id itself.) Global `--config <path>` selects an alternate profile file (multi-bot/tenant on one host); default `~/.daoubot/profile.json` (home-anchored, so it works from any directory). Precedence: flag > env > profile. The password is persisted in the profile (chmod 600, gitignored, `****`-masked on stdout) so a daemon re-authenticates unattended; `DAOU_PASSWORD`/an arg still override it.
+`login` (auto-discovers `company_id` when `--company-id` is omitted) · `whoami` · `config [show|set <key> <value>|path]` (view/edit the saved profile; `key` ∈ base_url/company_id/login_id/password) · `rooms` · `room create --users a,b [--name N] [--type GROUP]` · `room open <id>` · `send <room_id> "<text>"`. (No `start`: the CLI cannot carry a handler — run the bot as `python bot.py` with `DaouBot(on_message=...)`. No standalone `discover`: `login` resolves the company id itself.)
+
+Global flags (on every subcommand):
+- `--config <path>` — alternate **profile file** (where the SDK persists its own state — tokens, identity); default `~/.daoubot/profile.yaml`. Use a per-bot/tenant path for multiple accounts on one host.
+- `--app-config <path>` (or `DAOU_APP_CONFIG` env) — operator app config YAML whose top-level `daouoffice:` section provides connection values **read-only**. Lets a downstream app keep its SDK connection alongside its own settings in one declarative file (e.g. an `agent.yaml`) without `daoubot login`.
+
+Precedence: flag > env > app config (`daouoffice:` section) > profile. The password is persisted in the profile (chmod 600, gitignored, `****`-masked on stdout) so a daemon re-authenticates unattended; `DAOU_PASSWORD`/an arg still override it.
 
 ## Gotchas (encode these in any bot you build)
 

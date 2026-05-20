@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 """Echo bot — repeats every message back.
 
-Onboard once: `daoubot login` writes ~/.daoubot/profile.json; this bot reads
+Onboard once: `daoubot login` writes ~/.daoubot/profile.yaml; this bot reads
 it automatically from any directory. For unattended operation the saved
 password lets it re-authenticate itself when the ~30-min token expires.
 Any setting can be overridden via a DAOU_* env var (precedence: env > profile).
