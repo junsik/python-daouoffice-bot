@@ -79,7 +79,7 @@ daoubot login --base-url https://yourcompany.daouoffice.com
 
 ### 무인(백그라운드) 운영
 
-세션 토큰은 약 30분 뒤 만료됩니다. `daoubot login` 한 번이면 비밀번호가 프로필에 저장되므로, 봇/CLI 는 토큰 만료마다 **스스로 무한 재로그인**하고 새 토큰을 프로필에 다시 씁니다 — 추가 설정 없이 무인 운영됩니다. (원하면 `DAOU_PASSWORD` 환경 변수로 오버라이드 가능, 예: systemd `EnvironmentFile`.) 비밀번호가 전혀 없을 때만 토큰 만료 시 명확한 에러로 멈춥니다(사용자에게 재로그인을 강요하지 않음).
+AccessToken 은 약 30분 뒤 만료됩니다. `daoubot login` 한 번이면 30일짜리 RefreshToken 과 비밀번호가 프로필에 함께 저장돼, 봇/CLI 는 401 을 받으면 **(1) RefreshToken 으로 새 AccessToken 만 빠르게 발급**받고, 그게 실패할 때만 **(2) 비밀번호로 풀 재로그인**합니다 — 새 토큰은 프로필에 다시 씁니다. 추가 설정 없이 무인 운영됩니다. (`DAOU_PASSWORD` 환경 변수로 오버라이드 가능, 예: systemd `EnvironmentFile`.) RefreshToken 도 비밀번호도 전혀 없을 때만 만료 시 명확한 에러로 멈춥니다(사용자에게 재로그인을 강요하지 않음).
 
 모든 연결값(비밀번호 포함)은 **명시 인자 > `DAOU_*` 환경 변수 > 프로필** 순으로 해석됩니다. SDK는 `.env` 파일을 자동으로 읽지 않으니, 환경 변수로 오버라이드하려면 셸에 직접 export 하거나 systemd EnvironmentFile 을 쓰세요.
 
@@ -114,7 +114,7 @@ async def main():
 asyncio.run(main())
 ```
 
-`on_message` 가 문자열을 반환하면 답장, `None` 이면 무응답입니다. 답장은 그 핸들러를 유발한 메시지에 대한 **인용 회신(threaded reply)** 으로 자동 연결되므로(다우오피스 답장 UI 와 동일), 바쁜 방에서도 무엇에 대한 답인지 분명합니다. 핸들러를 주지 않으면 봇은 메시지를 읽기만 합니다(답장 안 함). 30분 만료 시 자격증명이 있으면 자동 재로그인합니다.
+`on_message` 가 문자열을 반환하면 답장, `None` 이면 무응답입니다. 답장은 그 핸들러를 유발한 메시지에 대한 **인용 회신(threaded reply)** 으로 자동 연결되므로(다우오피스 답장 UI 와 동일), 바쁜 방에서도 무엇에 대한 답인지 분명합니다. 핸들러를 주지 않으면 봇은 메시지를 읽기만 합니다(답장 안 함). 30분 만료 시 RefreshToken/자격증명이 있으면 자동 갱신·재로그인합니다.
 
 > 봇 계정은 누구나 아무 방에나 초대할 수 있습니다. 특정 방에서만 동작시키려면 `RoomRouter` 를 쓰세요 — 등록한 방만 처리하고 나머지는 무시합니다(allowlist). `bot = DaouBot(..., on_message=router)`. 예제: `examples/bot-router`.
 

@@ -102,7 +102,12 @@ def _authed_client(args: argparse.Namespace) -> BotClient:
         _store(c, base_url, cfg)
 
     if prof and prof.access_token:
-        client = BotClient.from_token(base_url, prof.access_token, on_auth=_persist)
+        client = BotClient.from_token(
+            base_url,
+            prof.access_token,
+            refresh_token=prof.refresh_token,
+            on_auth=_persist,
+        )
         try:
             client.identity = client.whoami()
             return client
@@ -139,6 +144,7 @@ def _store(client: BotClient, base_url: str, config_path: str | None = None) -> 
             user_id=ident.user_id,
             name=ident.name,
             access_token=client.access_token,
+            refresh_token=client.refresh_token,
             password=client._password,
         ),
         path=config_path,
@@ -182,8 +188,9 @@ def cmd_login(args: argparse.Namespace) -> None:
 
 
 # Profile fields a user may edit by hand. The rest (user_id, company_uuid,
-# company_domain, access_token, saved_at) are resolved/managed by `login`
-# and the daemon — editing them manually would only desync the profile.
+# company_domain, access_token, refresh_token, saved_at) are resolved/managed
+# by `login` and the daemon — editing them manually would only desync the
+# profile.
 _EDITABLE = ("base_url", "company_id", "login_id", "password")
 
 

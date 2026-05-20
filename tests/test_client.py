@@ -105,6 +105,95 @@ def test_discover_company_companylist() -> None:
     assert route.calls.last.request.headers["X-Referer-Info"] == "acme.daouoffice.com"
 
 
+def _login_routes_with_refresh(mock: respx.MockRouter) -> respx.Route:
+    """Login mock that also issues a RefreshToken (the real server does);
+    returns the login route so the caller can count re-login attempts."""
+    login = mock.post("/api/portal/public/auth/login").mock(
+        return_value=httpx.Response(
+            200,
+            json={"code": "SUCCESS-0000"},
+            headers=[
+                ("set-cookie", "AccessToken=acc-1; Path=/"),
+                ("set-cookie", "RefreshToken=rfr-1; Path=/"),
+            ],
+        )
+    )
+    mock.post("/api/portal/graphql").mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "data": {
+                    "me": {
+                        "id": 42,
+                        "name": "Acme Bot",
+                        "loginId": "acme-bot",
+                        "company": {
+                            "id": 11000,
+                            "uuid": "ACME-UUID",
+                            "domain": "acme",
+                            "name": "Acme",
+                        },
+                    }
+                }
+            },
+        )
+    )
+    return login
+
+
+@respx.mock
+def test_refresh_endpoint_mints_new_access_token_with_url_body() -> None:
+    _login_routes_with_refresh(respx.mock)
+    refresh = respx.post("/api/portal/public/auth/refresh/login").mock(
+        return_value=httpx.Response(
+            200,
+            json={"data": "OK"},
+            headers={"set-cookie": "AccessToken=acc-2; Path=/"},
+        )
+    )
+    rooms = respx.get("/api/chat/room").mock(
+        side_effect=[
+            httpx.Response(401, json={"code": "ROUTE-0004"}),
+            httpx.Response(200, json={"data": {"elements": [{"roomId": "r1"}]}}),
+        ]
+    )
+    client = BotClient("acme-bot", "p", base_url=BASE, company_id="11000")
+    client.login()
+    assert client.refresh_token == "rfr-1"  # captured at login
+
+    assert client.get_rooms()[0].roomId == "r1"
+    assert refresh.called  # cheap refresh used, not full re-login
+    # Body is the absolute URL of the failed request (capture wire shape).
+    body = refresh.calls.last.request.content
+    assert body == f"{BASE}/api/chat/room".encode()
+    assert refresh.calls.last.request.headers["content-type"] == "application/json"
+    # Cookie carries both tokens so the refresh endpoint can authenticate.
+    cookie = refresh.calls.last.request.headers["cookie"]
+    assert "AccessToken=acc-1" in cookie and "RefreshToken=rfr-1" in cookie
+    assert client.access_token == "acc-2"  # rotated
+    assert rooms.call_count == 2  # original + retry
+
+
+@respx.mock
+def test_refresh_failure_falls_back_to_full_relogin() -> None:
+    login = _login_routes_with_refresh(respx.mock)
+    # Refresh endpoint rejects → SDK must re-login with the password.
+    refresh = respx.post("/api/portal/public/auth/refresh/login").mock(
+        return_value=httpx.Response(401, json={"code": "ROUTE-0004"})
+    )
+    respx.get("/api/chat/room").mock(
+        side_effect=[
+            httpx.Response(401, json={"code": "ROUTE-0004"}),
+            httpx.Response(200, json={"data": {"elements": [{"roomId": "r1"}]}}),
+        ]
+    )
+    client = BotClient("acme-bot", "p", base_url=BASE, company_id="11000")
+    client.login()
+    assert client.get_rooms()[0].roomId == "r1"
+    assert refresh.called  # tried refresh first
+    assert login.call_count == 2  # then full re-login (initial + fallback)
+
+
 @respx.mock
 def test_auto_relogin_on_401() -> None:
     _login_routes(respx.mock)

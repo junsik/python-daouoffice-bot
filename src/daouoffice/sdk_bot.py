@@ -92,6 +92,7 @@ def _build_client(
                 user_id=c.identity.user_id,
                 name=c.identity.name,
                 access_token=c.access_token,
+                refresh_token=c.refresh_token,
                 password=c._password or (prof.password if prof else ""),
             ),
             base_dir,
@@ -106,7 +107,12 @@ def _build_client(
             on_auth=_persist,
         )
     if prof and prof.access_token:
-        return BotClient.from_token(s.base_url, prof.access_token, on_auth=_persist)
+        return BotClient.from_token(
+            s.base_url,
+            prof.access_token,
+            refresh_token=prof.refresh_token,
+            on_auth=_persist,
+        )
     raise DaouConfigError(
         "No credentials and no saved session. Run `daoubot login` first, "
         "or set DAOU_PASSWORD (e.g. a systemd EnvironmentFile) for "

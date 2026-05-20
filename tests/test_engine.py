@@ -363,7 +363,6 @@ def test_daou_log_level_env_scopes_package_logger_and_validates(monkeypatch) -> 
         pkg.setLevel(prev)
 
 
-
 class _TwoRoomClient:
     """Two rooms; r1's handler blocks on an event, r2 is fast."""
 
@@ -426,9 +425,7 @@ async def test_slow_room_does_not_block_other_rooms_or_poll() -> None:
     await asyncio.wait_for(engine._poll_once(), timeout=1.0)
 
     # r2 (fast) completes while r1 is still blocked → not head-of-line blocked.
-    await asyncio.wait_for(
-        _until(lambda: ("r2", "re: r2", "1") in client.sent), timeout=1.0
-    )
+    await asyncio.wait_for(_until(lambda: ("r2", "re: r2", "1") in client.sent), timeout=1.0)
     assert not any(s[0] == "r1" for s in client.sent)  # r1 still in flight
 
     # A re-poll while r1's handler is in flight must NOT start it again.

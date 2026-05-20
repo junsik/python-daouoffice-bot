@@ -22,14 +22,42 @@ Set-Cookie: GOSSOcookie=<uuid>; Path=/; Secure
 ```
 
 ### Auth 방식
-- `AccessToken` (JWT RS256, **약 30분** — SAZ 캡처상 `exp - iat = 1800s`) + `RefreshToken` (30일, `Max-Age=2592000`) 쿠키 기반
-- 모든 API 호출 시 `Cookie: AccessToken=...` 필요
+- `AccessToken` (JWT RS256, **약 30분** — JWT `exp - iat = 1800s`) + `RefreshToken` (30일, `Max-Age=2592000`, JWT `exp - iat = 2592000s`) 쿠키 기반
+- 모든 API 호출 시 `Cookie: AccessToken=...; RefreshToken=...` 송신
 - 만료 시 응답: `HTTP 401 {"code":"ROUTE-0004","message":"Invalid token"}`
-- 캡처된 트래픽 326세션 전체에 **AccessToken 재발급(refresh) 엔드포인트가 관측되지 않음**. 따라서 이 SDK는 장시간 실행 시 401을 받으면 RefreshToken 교환 대신 **재로그인**으로 세션을 복구한다 (다중 세션 허용 특성상 안전).
+- SDK 의 401 복구 순서: **(1) `/refresh/login` 으로 AccessToken 재발급** → (2) 실패 시 비밀번호로 풀 재로그인. RefreshToken 이 없거나 거부되면 자동으로 (2) 로 폴백.
 
 ---
 
-## 1.2 로그아웃 - POST /api/portal/common/auth/logout
+## 1.2 토큰 리프레시 - POST /api/portal/public/auth/refresh/login
+
+장시간 실행 시 30분짜리 AccessToken 을 비밀번호 없이 갱신한다. RefreshToken 은 회전하지 않고(요청·응답 JWT 의 `iat` 동일) AccessToken 만 새로 발급된다. 라이브 캡처(200 SUCCESS) 로 확인된 계약.
+
+### Request
+```
+POST /api/portal/public/auth/refresh/login
+Content-Type: application/json
+Cookie: RefreshToken=<JWT>; AccessToken=<JWT>
+
+https://yourcompany.daouoffice.com/api/chat/room/<roomId>/open
+```
+
+본문은 PC 메신저가 그 시점에 요청 중이던 절대 URL 한 줄(JSON 형식이 아니지만 `Content-Type: application/json` 으로 보낸다 — 서버는 본문 내용을 인증에 쓰지 않고 쿠키의 RefreshToken 으로 판단). SDK 는 401 을 유발한 요청의 절대 URL 을 본문으로 송신한다.
+
+### Response
+```
+HTTP 200
+Set-Cookie: AccessToken=<new JWT>; Max-Age=2592000; Path=/; HttpOnly
+Set-Cookie: RefreshToken=<same JWT>; Max-Age=2592000; Path=/; HttpOnly
+
+{"data":"OK"}
+```
+
+`AccessToken` 만 새 값. `RefreshToken` 은 같은 JWT 가 다시 set-cookie 되어 쿠키 수명만 갱신되고 값은 동일(회전 없음).
+
+---
+
+## 1.3 로그아웃 - POST /api/portal/common/auth/logout
 
 ### Request
 ```

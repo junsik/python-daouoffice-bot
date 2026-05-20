@@ -254,6 +254,7 @@ class BotClient:
         base_url: str | None = None,
         company_id: str | None = None,
         access_token: str = "",
+        refresh_token: str = "",
         on_auth: Callable[[BotClient], None] | None = None,
         user_agent: str = DEFAULT_USER_AGENT,
         timeout: float = 30.0,
@@ -278,6 +279,9 @@ class BotClient:
             headers=_default_headers(self._base_url, user_agent),
         )
         self.access_token: str = access_token
+        # 30-day RefreshToken: lets _refresh_session() mint a new
+        # AccessToken without re-presenting the password.
+        self.refresh_token: str = refresh_token
         self.identity: BotIdentity | None = None
         # Called after every successful login() (initial or 401-triggered),
         # so the owner can persist the refreshed token + identity.
@@ -289,19 +293,23 @@ class BotClient:
         base_url: str,
         access_token: str,
         *,
+        refresh_token: str = "",
         on_auth: Callable[[BotClient], None] | None = None,
         timeout: float = 30.0,
     ) -> BotClient:
         """Build a client from a previously obtained token (skips login).
 
         Validate it with :meth:`whoami`; an expired token raises on use.
-        Provide creds elsewhere (env) for the 401 path to self-recover.
+        Pass ``refresh_token`` (and/or creds via env) so the 401 path can
+        self-recover — refresh first if a RefreshToken exists, else full
+        re-login if a password is available.
         """
         return cls(
             "",
             "",
             base_url=base_url,
             access_token=access_token,
+            refresh_token=refresh_token,
             on_auth=on_auth,
             timeout=timeout,
         )
@@ -352,6 +360,10 @@ class BotClient:
         self.access_token = self._client.cookies.get("AccessToken", "")
         if not self.access_token:
             raise DaouAuthError("AccessToken cookie not present in login response")
+        # 30-day RefreshToken (capture-verified): a missing value is not
+        # fatal — full re-login still works — but without it the 401 path
+        # cannot use the cheap refresh endpoint.
+        self.refresh_token = self._client.cookies.get("RefreshToken", "")
 
         self.identity = self.whoami()
         logger.info(
@@ -365,33 +377,88 @@ class BotClient:
         return self.identity
 
     def get_auth_headers(self) -> dict[str, str]:
-        return {"Cookie": f"AccessToken={self.access_token}"}
+        parts = [f"AccessToken={self.access_token}"]
+        if self.refresh_token:
+            # The refresh endpoint requires it, and other endpoints tolerate
+            # the extra cookie; send both so 401 → refresh works mid-request.
+            parts.append(f"RefreshToken={self.refresh_token}")
+        return {"Cookie": "; ".join(parts)}
+
+    def _can_refresh(self) -> bool:
+        return bool(self.refresh_token)
 
     def _can_relogin(self) -> bool:
         return bool(self._login_id and self._password and self._company_id)
 
-    def _api(self, method: str, path: str, **kwargs) -> httpx.Response:
-        """Authenticated request; re-login once on a 401 if creds are known.
+    def _refresh_session(self, failed_path: str) -> None:
+        """Mint a fresh AccessToken from the RefreshToken (no password).
 
-        The AccessToken lives ~30 minutes and there is no observed refresh
-        endpoint, so a long-running bot recovers by re-authenticating. A fresh
-        login is a new server session and does not disturb other sessions.
+        Capture-verified contract (``POST /api/portal/public/auth/refresh/login``):
+        send both token cookies and the absolute URL of the request that
+        triggered the refresh as the body (Content-Type application/json,
+        though the body is the bare URL — matches the PC client's wire
+        format). Server returns 200 ``{"data":"OK"}`` and Set-Cookie:
+        AccessToken (RefreshToken kept). The 30-day RefreshToken lets a
+        long-running bot recover without re-presenting the password.
+
+        Raises :class:`DaouAuthError` on any non-success so the 401 path
+        falls back to full re-login.
+        """
+        url = f"{self._base_url}{failed_path}"
+        resp = self._client.post(
+            "/api/portal/public/auth/refresh/login",
+            content=url.encode("utf-8"),
+            headers={"Content-Type": "application/json", **self.get_auth_headers()},
+        )
+        if resp.status_code != HTTP_OK:
+            raise DaouAuthError(f"Refresh HTTP {resp.status_code}: {resp.text[:200]}")
+        body = resp.json() if resp.content else {}
+        if body.get("data") != "OK" and body.get("code", "SUCCESS-0000") != "SUCCESS-0000":
+            raise DaouAuthError(f"Refresh rejected: {body}")
+        new_access = self._client.cookies.get("AccessToken", "")
+        if not new_access:
+            raise DaouAuthError("Refresh response did not set a new AccessToken")
+        self.access_token = new_access
+        # The capture re-sets RefreshToken with the same JWT iat (kept, not
+        # rotated); reread it regardless so a future rotation is honored.
+        self.refresh_token = self._client.cookies.get("RefreshToken", self.refresh_token)
+        if self._on_auth is not None:
+            self._on_auth(self)
+
+    def _api(self, method: str, path: str, **kwargs) -> httpx.Response:
+        """Authenticated request; on 401, refresh once (cheap) before
+        falling back to a full re-login (heavy) if a password is known.
+
+        The AccessToken lives ~30 minutes. The 30-day RefreshToken mints a
+        new AccessToken without re-presenting the password; only when the
+        RefreshToken is missing or itself rejected do we fall back to a
+        password login. A fresh login is a new server session and does not
+        disturb other sessions.
         """
         headers = {**kwargs.pop("headers", {}), **self.get_auth_headers()}
         resp = self._client.request(method, path, headers=headers, **kwargs)
-        if resp.status_code == HTTP_UNAUTHORIZED:
+        if resp.status_code != HTTP_UNAUTHORIZED:
+            return resp
+
+        recovered = False
+        if self._can_refresh():
+            try:
+                logger.info("401 (%s) — refreshing session", path)
+                self._refresh_session(path)
+                recovered = True
+            except DaouAuthError as e:
+                logger.info("Refresh failed (%s); falling back to re-login", e)
+        if not recovered:
             if not self._can_relogin():
                 raise DaouAuthError(
-                    "Session expired (401) and no credentials to re-authenticate. "
-                    "Set DAOU_PASSWORD for unattended re-login, or run "
-                    "`daoubot login` again. (A profile token alone cannot be "
-                    "refreshed after ~30 minutes.)"
+                    "Session expired (401), refresh unavailable, and no "
+                    "credentials to re-authenticate. Set DAOU_PASSWORD for "
+                    "unattended re-login, or run `daoubot login` again."
                 )
             logger.info("401 (%s) — session expired, re-authenticating", path)
-            self.login()  # persists the new token via on_auth
-            headers = {**headers, **self.get_auth_headers()}
-            resp = self._client.request(method, path, headers=headers, **kwargs)
-        return resp
+            self.login()  # persists the new tokens via on_auth
+        headers = {**headers, **self.get_auth_headers()}
+        return self._client.request(method, path, headers=headers, **kwargs)
 
     def whoami(self) -> BotIdentity:
         """Resolve the logged-in account's own identity via GraphQL ``me``."""
