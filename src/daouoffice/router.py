@@ -28,7 +28,8 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from collections.abc import Awaitable, Callable
+import re
+from collections.abc import Awaitable, Callable, Iterable
 
 from daouoffice.client import NewMessage
 
@@ -52,6 +53,61 @@ def only_when_mentioned(fn: Handler, *, include_all: bool = True) -> Handler:
 
     async def gated(msg: NewMessage) -> str | None:
         if not (msg.mentions_me or (include_all and msg.mention_all)):
+            return None
+        result = fn(msg)
+        if asyncio.iscoroutine(result):
+            return await result
+        return result  # type: ignore[return-value]
+
+    return gated
+
+
+# Letters (case-insensitive), Hangul syllables, digits, and underscore.
+# Used as the "word" class for alias boundary lookbehind/lookahead so
+# `@디티` matches "@디티 누구야" but not "@디티봇" or "@디티는".
+_ALIAS_WORD = r"[A-Za-z가-힣ㄱ-ㆎ0-9_]"
+
+
+def only_when_addressed(
+    fn: Handler,
+    *,
+    aliases: Iterable[str] = (),
+    include_all: bool = True,
+) -> Handler:
+    """Wrap a handler so it runs only when the bot is addressed.
+
+    Superset of :func:`only_when_mentioned`: the wrapped handler runs when
+
+    * the bot is @-mentioned (``mentions_me``, token-bound to the bot's
+      user_id), or
+    * ``include_all`` is set and the message has an ``@ALL`` mention, or
+    * any element of ``aliases`` appears in ``message_text`` as ``@<alias>``
+      with non-word boundaries on each side (so ``@디티`` matches
+      ``"@디티 누구야"`` but not ``"@디티봇"`` or ``"@디티는"``).
+
+    Matching is case-insensitive. With ``aliases=()`` this behaves
+    identically to :func:`only_when_mentioned`.
+
+    The alias path is text-only — no server check that ``@<alias>``
+    really addresses *this* bot, so don't gate privileged actions on it.
+    It is a way for people to call the bot, not a permission.
+    """
+    aliases_t = tuple(a for a in aliases if a)
+    alias_re: re.Pattern[str] | None = None
+    if aliases_t:
+        alts = "|".join(re.escape(a) for a in aliases_t)
+        alias_re = re.compile(
+            rf"(?<!{_ALIAS_WORD})@(?:{alts})(?!{_ALIAS_WORD})",
+            re.IGNORECASE,
+        )
+
+    async def gated(msg: NewMessage) -> str | None:
+        addressed = (
+            msg.mentions_me
+            or (include_all and msg.mention_all)
+            or (alias_re is not None and alias_re.search(msg.message_text) is not None)
+        )
+        if not addressed:
             return None
         result = fn(msg)
         if asyncio.iscoroutine(result):

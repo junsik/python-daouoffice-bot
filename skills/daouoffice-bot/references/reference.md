@@ -13,6 +13,7 @@ Condensed, self-contained API + gotchas for building bots. (Repo docs: `docs/ARC
 | `NewMessage` | Inbound message (see fields below). |
 | `RoomRouter` | Per-room handler dispatch; **allowlist** — unregistered rooms ignored. `add_room(id, fn)`, `add_room_type("SINGLE"/"GROUP", fn)`, `set_default(fn)`, decorators `@router.room(id)` / `@router.room_type(t)` / `@router.default`. Pass the router as `on_message`. |
 | `only_when_mentioned(fn, *, include_all=True)` | Wrap a handler so it runs only when `mentions_me` (or `@ALL`). Composable with `on_message` or a router handler. |
+| `only_when_addressed(fn, *, aliases=(), include_all=True)` | Superset of the above — also passes through when `message_text` contains `@<alias>` for any listed alias (case-insensitive, word-bounded so `@디티` ≠ `@디티봇`). Alias path is text only — anyone can type `@<alias>`, so it's an addressing convenience, **not** a permission. |
 | `load_settings(...)` / `Settings` | Resolve base_url/company_id/login_id/password: arg > `DAOU_*` env > app config YAML's `daouoffice:` section > profile (password included, so a daemon re-auths unattended). |
 | `load_app_config(path)` | Read the operator app config's top-level `daouoffice:` section as a dict. Missing file → empty; malformed/non-mapping → `DaouConfigError`. |
 | `Profile` / `load_profile` / `save_profile` | `~/.daoubot/profile.yaml` model (home-anchored, cwd-independent). Legacy `profile.json` is read transparently on first load and rewritten as YAML on the next save. |

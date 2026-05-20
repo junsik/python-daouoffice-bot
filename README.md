@@ -135,7 +135,7 @@ asyncio.run(main())
 
 > 봇 계정은 누구나 아무 방에나 초대할 수 있습니다. 특정 방에서만 동작시키려면 `RoomRouter` 를 쓰세요 — 등록한 방만 처리하고 나머지는 무시합니다(allowlist). `bot = DaouBot(..., on_message=router)`. 예제: `examples/bot-router`.
 
-**멘션:** 다우오피스 멘션은 본문 인라인 토큰입니다(전체 공개, 비공개 아님 — [docs/api/03-messages.md](docs/api/03-messages.md) §3.6). SDK가 파싱해 `msg.mentions` / `msg.mentions_me` / `msg.mention_all` 와 사람이 읽는 `message_text`(토큰 → `@이름`), 원본 `raw_text` 를 제공합니다. 바쁜 그룹에서 멘션 시에만 응답하려면 `only_when_mentioned(handler)` 로 감싸세요(글로벌 노브 아님 — 정책은 선언으로).
+**멘션:** 다우오피스 멘션은 본문 인라인 토큰입니다(전체 공개, 비공개 아님 — [docs/api/03-messages.md](docs/api/03-messages.md) §3.6). SDK가 파싱해 `msg.mentions` / `msg.mentions_me` / `msg.mention_all` 와 사람이 읽는 `message_text`(토큰 → `@이름`), 원본 `raw_text` 를 제공합니다. 바쁜 그룹에서 멘션 시에만 응답하려면 `only_when_mentioned(handler)` 로 감싸세요(글로벌 노브 아님 — 정책은 선언으로). 봇이 별명(예: `@디티`/`@DT`) 으로도 불릴 수 있어야 하면 `only_when_addressed(handler, aliases=("디티","DT"))` — 진짜 멘션 + 평문 `@별명` 모두 통과(별명은 인증 안 됨, 권한 게이트로 쓰지 말 것).
 
 ```python
 bot = DaouBot(..., on_message=only_when_mentioned(handle))
@@ -239,6 +239,7 @@ npx skills add junsik/python-daouoffice-bot --skill daouoffice-bot
 | `DaouBot` | 고수준 봇 (`on_message` + 폴링 + 401 자동 재로그인) |
 | `RoomRouter` | 방별 핸들러 분기 (등록한 방만 처리, 나머지 무시) |
 | `only_when_mentioned` | 봇 멘션(`@봇`/`@전체`) 시에만 핸들러 실행 |
+| `only_when_addressed` | 위 + 별명도 인식 (`@별명` 평문, `aliases=(...)`). 별명은 평문이라 권한 게이트로는 부적합 |
 | `load_settings` / `Settings` | 연결설정 해석(인자>env>프로필); `DaouBot()` 이 내부 사용 |
 | `FileCursorStore` / `MemoryCursorStore` | 처리 위치 영속/비영속 저장 |
 | `NewMessage` | 정규화된 수신 메시지 |

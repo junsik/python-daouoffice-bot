@@ -23,7 +23,7 @@ from daouoffice.config import Settings, load_settings
 from daouoffice.engine import BotEngine
 from daouoffice.markdown import to_chat_html
 from daouoffice.profile import Profile, load_profile, save_profile
-from daouoffice.router import RoomRouter, only_when_mentioned
+from daouoffice.router import RoomRouter, only_when_addressed, only_when_mentioned
 from daouoffice.sdk_bot import DaouBot
 from daouoffice.state import CursorStore, FileCursorStore, MemoryCursorStore
 
@@ -48,6 +48,7 @@ __all__ = (
     "__version_info__",
     "load_profile",
     "load_settings",
+    "only_when_addressed",
     "only_when_mentioned",
     "save_profile",
     "to_chat_html",

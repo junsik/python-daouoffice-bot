@@ -34,6 +34,7 @@ The runnable examples in the SDK repo (`examples/bot-*`) are the canonical refer
 | One behavior, any/one room | bare `on_message(msg)->str|None` | `examples/bot-echobot` |
 | Different behavior per room / DM vs group | `RoomRouter` (allowlist: unregistered rooms ignored) | `examples/bot-router` |
 | Quiet in busy groups, act only when addressed | wrap handler in `only_when_mentioned(...)` | `examples/bot-router` (group-room handler) |
+| Also respond when called by nickname (`@디티`, `@DT`) | wrap with `only_when_addressed(handler, aliases=("디티","DT"))` — superset of `only_when_mentioned`, adds plain-text `@<alias>` matching with Korean/English word boundaries. **Aliases are not authenticated** (anyone can type one), so use as an addressing path, not a permission. | — |
 | `/cmd args` commands | parse a `msg.message_text` prefix yourself (no command framework; `/` is just convention, pick any) | `examples/bot-command` |
 | Per-room conversation state | dict keyed by `msg.room_id` (or external store) | `examples/bot-conversation` |
 | AI / LLM answers | call any LLM/API **inside** the handler (SDK bundles none) | `examples/bot-assistant` |

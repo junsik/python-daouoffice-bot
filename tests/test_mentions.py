@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from daouoffice import NewMessage, only_when_mentioned
+from daouoffice import NewMessage, only_when_addressed, only_when_mentioned
 from daouoffice.client import ChatHistoryItem, parse_mentions
 from daouoffice.engine import BotEngine
 
@@ -58,13 +58,13 @@ def test_engine_populates_mention_fields() -> None:
     assert msg.mention_all is False
 
 
-def _msg(*, mentions_me=False, mention_all=False) -> NewMessage:
+def _msg(text: str = "hi", *, mentions_me=False, mention_all=False) -> NewMessage:
     return NewMessage(
         room_id="r1",
         room_type="GROUP",
         sender_user_id="u",
         sender_name="T",
-        message_text="hi",
+        message_text=text,
         message_id="1",
         created_at="",
         mentions_me=mentions_me,
@@ -86,3 +86,67 @@ async def test_only_when_mentioned_exclude_all() -> None:
     gated = only_when_mentioned(lambda m: "pong", include_all=False)
     assert await gated(_msg(mention_all=True)) is None
     assert await gated(_msg(mentions_me=True)) == "pong"
+
+
+# -- only_when_addressed ----------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_only_when_addressed_token_mention_still_works() -> None:
+    # With no aliases set it behaves exactly like only_when_mentioned.
+    gated = only_when_addressed(lambda m: "pong")
+    assert await gated(_msg(mentions_me=True)) == "pong"
+    assert await gated(_msg(mention_all=True)) == "pong"
+    assert await gated(_msg("plain talk")) is None
+
+
+@pytest.mark.asyncio
+async def test_only_when_addressed_alias_in_text() -> None:
+    gated = only_when_addressed(lambda m: "pong", aliases=("디티", "DT"))
+    # Each alias hits, both case variants of DT hit (case-insensitive).
+    assert await gated(_msg("안녕 @디티 누구야")) == "pong"
+    assert await gated(_msg("hey @DT, what's up")) == "pong"
+    assert await gated(_msg("hey @dt, what's up")) == "pong"
+
+
+@pytest.mark.asyncio
+async def test_only_when_addressed_word_boundary_blocks_partial_matches() -> None:
+    gated = only_when_addressed(lambda m: "pong", aliases=("디티",))
+    # `@디티봇` / `@디티는` should NOT match `@디티` — Hangul boundary.
+    assert await gated(_msg("@디티봇 이리와")) is None
+    assert await gated(_msg("@디티는 어디?")) is None
+    # `@디티스` similarly.
+    assert await gated(_msg("ping @디티스 here")) is None
+    # But trailing punctuation is fine.
+    assert await gated(_msg("@디티, 안녕")) == "pong"
+    assert await gated(_msg("@디티.")) == "pong"
+
+
+@pytest.mark.asyncio
+async def test_only_when_addressed_no_naked_alias_without_at() -> None:
+    # "디티" alone is plain text, not addressing; must have the @ prefix.
+    gated = only_when_addressed(lambda m: "pong", aliases=("디티",))
+    assert await gated(_msg("디티 알려줘")) is None
+
+
+@pytest.mark.asyncio
+async def test_only_when_addressed_alias_with_special_chars() -> None:
+    # Special regex chars in an alias are escaped, not treated as syntax.
+    gated = only_when_addressed(lambda m: "pong", aliases=("dt.bot",))
+    assert await gated(_msg("@dt.bot 안녕")) == "pong"
+    assert await gated(_msg("@dtXbot 안녕")) is None  # the dot is literal, not "any char"
+
+
+@pytest.mark.asyncio
+async def test_only_when_addressed_exclude_all_still_works() -> None:
+    gated = only_when_addressed(lambda m: "pong", aliases=("디티",), include_all=False)
+    # include_all=False shuts the @ALL path; alias path still open.
+    assert await gated(_msg(mention_all=True)) is None
+    assert await gated(_msg("@디티 hi")) == "pong"
+
+
+@pytest.mark.asyncio
+async def test_only_when_addressed_alias_path_independent_of_mentions_me() -> None:
+    # Alias hit alone, with no token mention, is enough.
+    gated = only_when_addressed(lambda m: "pong", aliases=("디티",))
+    assert await gated(_msg("@디티 누구야", mentions_me=False, mention_all=False)) == "pong"
