@@ -6,8 +6,9 @@ Condensed, self-contained API + gotchas for building bots. (Repo docs: `docs/ARC
 
 | Symbol | Purpose |
 |---|---|
-| `DaouBot` | High-level bot. `DaouBot(on_message=...)` resolves connection from a `daoubot login` profile / `DAOU_*` env (arg > env > profile). `run_forever()` = login + poll + graceful SIGINT/SIGTERM. Set `DAOU_PASSWORD` for unattended auto re-login. |
-| `BotClient` | REST wrapper: `login()`, `whoami()`, `discover_company()`, `get_rooms()`, `create_room()`, `open_room()`, `send_message(room, content="", *, attachments=[...])`, `upload_attachment(path)`, `send_file(room, path, content="")`, `get_chat_history()`, `mark_read()`. `from_token()`. |
+| `DaouBot` | High-level bot. `DaouBot(on_message=..., *, markdown=False)` resolves connection from a `daoubot login` profile / `DAOU_*` env (arg > env > profile). `markdown=True` renders each reply's Markdown into the chat-HTML subset before sending (see gotcha 9). `run_forever()` = login + poll + graceful SIGINT/SIGTERM. The daemon recovers itself on 401 — RefreshToken first, then full re-login (see gotcha 5). |
+| `BotClient` | REST wrapper: `login()`, `whoami()`, `discover_company()`, `get_rooms()`, `create_room()`, `open_room()`, `send_message(room, content="", *, attachments=[...], reply_to=None)`, `upload_attachment(path)`, `send_file(room, path, content="")`, `get_chat_history()`, `mark_read(message_id, room_id)`. `from_token(..., refresh_token=...)`. |
+| `to_chat_html(text)` | Markdown → chat-HTML subset converter (bold, italic, links, ordered/bullet lists, line breaks). Exposed for manual rendering; `DaouBot(markdown=True)` calls it automatically on each handler reply. |
 | `BotEngine` | Polling engine (used internally by `DaouBot`). |
 | `NewMessage` | Inbound message (see fields below). |
 | `RoomRouter` | Per-room handler dispatch; **allowlist** — unregistered rooms ignored. `add_room(id, fn)`, `add_room_type("SINGLE"/"GROUP", fn)`, `set_default(fn)`, decorators `@router.room(id)` / `@router.room_type(t)` / `@router.default`. Pass the router as `on_message`. |
@@ -32,11 +33,13 @@ Condensed, self-contained API + gotchas for building bots. (Repo docs: `docs/ARC
 2. **At-least-once + idempotency.** A message is re-delivered until the handler returns without raising; restart/crash can re-deliver. Make side effects idempotent. Repeated failures past `max_attempts` (default 5) are skipped as "poison". Fire-and-forget = swallow errors in the handler.
 3. **Allowlist for groups.** Without `RoomRouter`/`only_when_mentioned` the bot replies to every message in every room it is invited to (spam/footgun).
 4. **Mentions are inline text tokens** (`{{uuid::USER::@name::id}}` / `{{uuid::ALL::@ALL}}`), broadcast to the whole room (not private). Already parsed into `mentions*`; don't regex `message_text` yourself.
-5. **Token ~30 min, auto re-login.** No refresh endpoint exists; the client re-logs in on 401 using the credentials (so `DaouBot` needs them, not just a token).
-6. **Restart-resume is bounded** by the ~20-message history window — long downtime loses out-of-window messages (no "since id" API).
-7. **Not supported by DaouOffice:** webhooks, inline keyboards/buttons, inline queries, slash-command framework, BotFather, WebSocket (endpoint observed but unimplemented). Do not fabricate these.
-8. **Don't run two bot processes on one account** — duplicate handling + `mark_read` races. Scale with `RoomRouter` in one process.
-9. **Files are attachments, not inline.** MD/HTML is not rendered in chat; `send_file(room, path)` uploads it as a downloadable attachment. Good for an LLM-generated newsletter: write `news.md`/`.html`, then `send_file`. Attachment contracts are SAZ-derived and **live-unverified**.
+5. **Token recovery on 401.** AccessToken ~30 min, RefreshToken 30 days. On 401 the SDK tries `/refresh/login` first (cheap, no password) and falls back to full password re-login only if refresh fails or no RefreshToken is on hand. So a profile with only a token still recovers — until the 30-day refresh expires; persist the password (it already is) for indefinite unattended runs.
+6. **Restart-resume is bounded by the per-room fetch window (~100 newest).** Long downtime (more than ~100 messages piled up in one room) loses the out-of-window tail — there is no "since id" API. This is a structural polling limit, not a knob.
+7. **Replies are auto-threaded.** Whatever string a handler returns is posted as a quote-reply to the message that triggered it (`message_id` → `parentChatMessageId`). The engine owns this — handlers do not pass `reply_to`. For free-form (non-threaded) sends, call `bot.client.send_message(...)` directly without `reply_to`.
+8. **Not supported by DaouOffice:** webhooks, inline keyboards/buttons, inline queries, slash-command framework, BotFather, WebSocket (endpoint observed but unimplemented). Do not fabricate these.
+9. **Markdown subset only.** The chat renders **just** these tags: `<b>`, `<i>`, `<a href>`, `<ol><li>`, `<ul><li>`, `<br>`. With `markdown=True` the SDK converts `**bold**` / `*italic*` / `[t](url)` / `1.` / `-`; everything else (headings, code fences, blockquotes) degrades to escaped literal text rather than emit a tag the client would show raw. For longer documents (full Markdown/HTML), upload as an attachment via `send_file` instead.
+10. **Don't run two bot processes on one account** — duplicate handling + `mark_read` races. Scale with `RoomRouter` in one process.
+11. **Files are attachments, not inline.** Use `send_file(room, path)` (uploads then posts as a downloadable). Good for an LLM-generated newsletter: write `news.md`/`.html`, then `send_file`. Attachment contracts are SAZ-derived and **live-unverified**.
 
 ## Minimal working bot
 
@@ -56,4 +59,6 @@ asyncio.run(main())
 
 `DaouBot()` resolves connection from the `daoubot login` profile (or `DAOU_*`
 env / explicit args; arg > env > profile). No credentials belong in the bot
-code. For unattended runs set `DAOU_PASSWORD` so it re-authenticates itself.
+code. `daoubot login` persists the password into the profile, so the daemon
+re-authenticates itself indefinitely (refresh covers the first 30 days from
+each login; the saved password covers everything beyond).

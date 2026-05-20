@@ -11,7 +11,7 @@ license: MIT
 
 # DaouOffice Bot Builder
 
-You are designing a bot **to the user's actual requirements** on `python-daouoffice-bot` (an unofficial, reverse-engineered SDK). This skill is the SDK author's distilled knowledge: do not guess from a template menu — elicit what the user needs, then assemble the right bot from primitives while obeying the invariants below. `reference.md` has the full API + gotchas.
+You are designing a bot **to the user's actual requirements** on `python-daouoffice-bot` (an unofficial, reverse-engineered SDK). This skill is the SDK author's distilled knowledge: do not guess from a template menu — elicit what the user needs, then assemble the right bot from primitives while obeying the invariants below. `references/reference.md` has the full API + gotchas.
 
 ## Step 1 — Elicit requirements (ask, don't assume)
 
@@ -27,25 +27,39 @@ If the user is vague ("make an AI bot"), pick the smallest design that meets the
 
 ## Step 2 — Map requirements → design
 
-| Requirement | Use |
-|---|---|
-| One behavior, any/one room | bare `on_message(msg)->str|None` |
-| Different behavior per room / DM vs group | `RoomRouter` (allowlist: unregistered rooms ignored) |
-| Quiet in busy groups, act only when addressed | wrap handler in `only_when_mentioned(...)` |
-| `/cmd args` commands | parse a `msg.message_text` prefix yourself (no command framework; `/` is just convention, pick any) |
-| Conversation state | dict keyed by `msg.room_id` (or external store) |
-| AI answers | call any LLM/API **inside** the handler — SDK bundles none |
-| Proactive/scheduled send | run a separate task using `bot.send_message(room_id, text)`; polling stays for inbound |
-| Survive restarts | default `FileCursorStore` already does; nothing to do |
+The runnable examples in the SDK repo (`examples/bot-*`) are the canonical reference for each pattern — short(~50 lines), self-contained. Open the one closest to the user's case, adapt, don't re-derive.
+
+| Requirement | Use | Example |
+|---|---|---|
+| One behavior, any/one room | bare `on_message(msg)->str|None` | `examples/bot-echobot` |
+| Different behavior per room / DM vs group | `RoomRouter` (allowlist: unregistered rooms ignored) | `examples/bot-router` |
+| Quiet in busy groups, act only when addressed | wrap handler in `only_when_mentioned(...)` | `examples/bot-router` (group-room handler) |
+| `/cmd args` commands | parse a `msg.message_text` prefix yourself (no command framework; `/` is just convention, pick any) | `examples/bot-command` |
+| Per-room conversation state | dict keyed by `msg.room_id` (or external store) | `examples/bot-conversation` |
+| AI / LLM answers | call any LLM/API **inside** the handler (SDK bundles none) | `examples/bot-assistant` |
+| Bold/italic/links/lists in replies | `DaouBot(..., markdown=True)` — engine renders Markdown to the chat's HTML subset; other syntax degrades to literal text | — |
+| Reply visibly tied to the prompt | nothing — the engine already threads every handler reply to the message that triggered it (delivery property, not a flag) | — |
+| File attachments out (long docs, CSVs) | `bot.send_file(room, path, content="")` (chat doesn't render long MD/HTML inline) | `examples/bot-attachment` |
+| Proactive / scheduled send | a separate `asyncio.Task` calling `bot.client.send_message(room_id, text)` alongside `bot.run_forever()` — polling stays for inbound only | — |
+| Blocking work inside a handler | wrap with `await asyncio.to_thread(blocking_fn, ...)` — synchronous code in a handler stalls polling for every room | `examples/bot-assistant` (uses async httpx; the same shape with `to_thread` for sync libs) |
+| Recover from handler errors gracefully | catch in handler (fire-and-forget) vs let it raise (at-least-once retry, see invariants) | `examples/bot-error-handler` |
+| Survive restarts | default `FileCursorStore` already does; nothing to do | — |
 
 Compose these — they are orthogonal (e.g. `RoomRouter` whose group handler is `only_when_mentioned(llm_handler)` with per-room history).
+
+## Step 2.5 — Configuration: what reads what
+
+Two layers, kept separate:
+
+- **SDK connection** (`base_url`, `company_id`, `login_id`, `password`) — resolved by the SDK in this order: **explicit argument > `DAOU_*` env > `~/.daoubot/profile.json`** (written by `daoubot login`). Your bot code never re-implements this; `DaouBot(on_message=...)` and the SDK does it. The `DAOU_*` family is for connection only — don't repurpose those names for bot config.
+- **Bot behavior** (which rooms are allowed, command prefix, LLM keys, feature flags) — yours to name and layer. Pick env names that fit the bot (`ROOM_ALLOW`, `BOT_CMD_PREFIX`, `LLM_API_KEY`, …); `examples/bot-router` shows the env-conditional registration pattern. A sensible layering is **arg > env > YAML/JSON file > default**; never commit secrets or tenant identifiers.
 
 ## Step 3 — Assemble (start from the skeleton, then build)
 
 `scaffold.py` prints **only** the correct boilerplate (env/profile config, graceful run loop, empty handler). It does not choose the design — you do, in the handler, from Step 2.
 
 ```bash
-python skills/daouoffice-bot/scaffold.py > bot.py   # path: where the skill is installed
+python skills/daouoffice-bot/scripts/scaffold.py > bot.py   # path: where the skill is installed
 ```
 
 Then implement the handler. Build the bot as `DaouBot(on_message=...)` — it resolves connection from the operator's `daoubot login` profile (or `DAOU_*` env / explicit args; precedence arg > env > profile). Never put credentials or a tenant URL in the bot code. The user runs `daoubot login` once first — that persists the password in `~/.daoubot/profile.json` (chmod 600, gitignored, home-anchored so it works from any directory), so the daemon re-authenticates unattended with no extra config. `DAOU_PASSWORD` is only an optional override. Read room ids from env/args too.
@@ -71,4 +85,4 @@ daoubot send <room_id> "smoke test" # confirm live access BEFORE long-run
 python bot.py
 ```
 
-State plainly that contracts are tested but live behavior depends on the tenant. See `reference.md` for the API surface, the mention/auth/delivery mechanics, and all gotchas; the SDK repo has `docs/ARCHITECTURE.md` (design rationale) and runnable `examples/` to copy patterns from.
+State plainly that contracts are tested but live behavior depends on the tenant. See `references/reference.md` for the API surface, the mention/auth/delivery mechanics, and all gotchas; the SDK repo has `docs/ARCHITECTURE.md` (design rationale) and runnable `examples/` to copy patterns from.

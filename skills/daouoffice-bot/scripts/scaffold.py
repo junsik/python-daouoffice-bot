@@ -2,9 +2,9 @@
 """Print the minimal correct bot skeleton — boilerplate only.
 
 This deliberately does NOT pick a bot "type". The design (router? mention
-gate? commands? state? LLM?) is decided from the user's requirements per
-SKILL.md; this only removes the env/profile + run-loop ceremony so the agent
-fills in the handler.
+gate? commands? markdown? state? LLM?) is decided from the user's
+requirements per SKILL.md; this only removes the connection/run-loop
+ceremony so the agent fills in the handler.
 
     python scaffold.py > bot.py
 """
@@ -16,9 +16,13 @@ import sys
 SKELETON = '''#!/usr/bin/env python
 """DaouOffice bot.
 
-The four connection settings are read from the environment explicitly so the
-required inputs are visible (no hard-coded secrets):
-DAOU_BASE_URL, DAOU_COMPANY_ID, DAOU_LOGIN_ID, DAOU_PASSWORD
+Connection (tenant URL, account, password) is resolved by the SDK in this
+order — explicit argument > DAOU_* env > ~/.daoubot/profile.json. Run
+`daoubot login` once first so the profile is populated; after that this
+script needs no env or args. To override on a host (e.g. systemd
+EnvironmentFile), set DAOU_BASE_URL / DAOU_COMPANY_ID / DAOU_LOGIN_ID /
+DAOU_PASSWORD. Never hard-code credentials here.
+
 Run:  python bot.py
 """
 
@@ -26,7 +30,6 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import os
 
 from daouoffice import DaouBot, NewMessage
 
@@ -41,20 +44,18 @@ async def on_message(msg: NewMessage) -> str | None:
     # TODO: implement the behavior the user asked for.
     #   msg.room_id / room_type / sender_name / message_text
     #   msg.mentions_me / mention_all / mentions / raw_text
-    # Return a string to reply, or None for no reply.
-    # Compose RoomRouter / only_when_mentioned per SKILL.md Step 2 if needed.
+    # Return a string to reply, or None for no reply. Compose
+    # RoomRouter / only_when_mentioned per SKILL.md Step 2 as needed.
     # Keep it idempotent (delivery is at-least-once).
     return None
 
 
 async def main() -> None:
-    bot = DaouBot(
-        base_url=os.environ["DAOU_BASE_URL"],
-        company_id=os.environ["DAOU_COMPANY_ID"],
-        login_id=os.environ["DAOU_LOGIN_ID"],
-        password=os.environ["DAOU_PASSWORD"],
-        on_message=on_message,
-    )
+    # `markdown=True` would render bold/italic/links/lists in replies
+    # (chat HTML subset). Leave off unless the design calls for styled
+    # output. The engine already auto-threads each reply to the message
+    # that triggered it; no flag needed.
+    bot = DaouBot(on_message=on_message)
     await bot.run_forever()
 
 
