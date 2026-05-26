@@ -48,7 +48,17 @@ class DaouConfigError(ValueError):
 
 
 class DaouAuthError(RuntimeError):
-    """Raised when login fails or the session is rejected."""
+    """Raised when login fails or the session is rejected.
+
+    Attributes:
+        code: The server error code (e.g. ``"PORTAL-0901"``).
+    """
+
+    code: str = ""
+
+    def __init__(self, message: str, code: str = "") -> None:
+        super().__init__(message)
+        self.code = code
 
 
 def _resolve(value: str | None, env: str) -> str | None:
@@ -346,16 +356,43 @@ class BotClient:
                 "captcha": "",
             },
         )
-        if resp.status_code != HTTP_OK:
-            raise DaouAuthError(f"Login HTTP {resp.status_code}: {resp.text[:300]}")
-        body = resp.json()
-        logger.debug("Login response: %s", body)
+
+        body = resp.json() if resp.content else {}
+        logger.debug("Login response: status=%d body=%s", resp.status_code, body)
 
         code = body.get("code", "")
         if not code and body.get("data") in ("OK", True):
             code = "SUCCESS-0000"
-        if code != "SUCCESS-0000":
-            raise DaouAuthError(f"Login failed: {code or body}")
+
+        # PORTAL-0901: 3-month password change required.
+        # Try to delay the change via the change-delay API and retry login.
+        if resp.status_code != HTTP_OK or code == "PORTAL-0901":
+            if not self._password:
+                raise DaouAuthError(
+                    "Login failed: PORTAL-0901 (password change required), "
+                    "but no password available to delay. Run `daoubot login`.",
+                    code=code or "PORTAL-0901",
+                )
+            self._try_password_change_delay(body)
+
+            resp = self._client.post(
+                "/api/portal/public/auth/login",
+                json={
+                    "companyId": self._company_id,
+                    "loginId": self._login_id,
+                    "password": self._password,
+                    "captcha": "",
+                },
+            )
+            body = resp.json() if resp.content else {}
+            logger.debug("Login retry response: status=%d body=%s", resp.status_code, body)
+
+            code = body.get("code", "")
+            if not code and body.get("data") in ("OK", True):
+                code = "SUCCESS-0000"
+
+        if resp.status_code != HTTP_OK or code != "SUCCESS-0000":
+            raise DaouAuthError(f"Login failed: {code or resp.text[:200]}", code=code or "")
 
         self.access_token = self._client.cookies.get("AccessToken", "")
         if not self.access_token:
@@ -390,6 +427,24 @@ class BotClient:
     def _can_relogin(self) -> bool:
         return bool(self._login_id and self._password and self._company_id)
 
+    def _try_password_change_delay(self, login_body: dict) -> None:
+        """Call the password-change-delay API when PORTAL-0901 is returned.
+
+        The API returns ``{"data":"OK"}`` on success.  The ``changePeriod``
+        field (e.g. 3) indicates how many months the delay is valid for.
+        After a successful delay the caller is expected to retry login.
+        """
+        is_delayable = (login_body.get("data") or {}).get("isPasswordChangeDelayable")
+        if not is_delayable:
+            return
+        logger.info("PORTAL-0901 detected — delaying password change requirement")
+        try:
+            self._client.put(
+                "/api/portal/common/password/change-delay",
+            )
+        except Exception:
+            logger.warning("password-change-delay API failed; retrying login anyway")
+
     def _refresh_session(self, failed_path: str) -> None:
         """Mint a fresh AccessToken from the RefreshToken (no password).
 
@@ -410,11 +465,22 @@ class BotClient:
             content=url.encode("utf-8"),
             headers={"Content-Type": "application/json", **self.get_auth_headers()},
         )
-        if resp.status_code != HTTP_OK:
-            raise DaouAuthError(f"Refresh HTTP {resp.status_code}: {resp.text[:200]}")
         body = resp.json() if resp.content else {}
-        if body.get("data") != "OK" and body.get("code", "SUCCESS-0000") != "SUCCESS-0000":
-            raise DaouAuthError(f"Refresh rejected: {body}")
+        if resp.status_code != HTTP_OK:
+            raise DaouAuthError(
+                f"Refresh HTTP {resp.status_code}: {resp.text[:200]}",
+                code=body.get("code", ""),
+            )
+        refresh_code = body.get("code", "SUCCESS-0000")
+        if body.get("data") != "OK" and refresh_code != "SUCCESS-0000":
+            # PORTAL-0901 during refresh: delay password change and retry
+            if refresh_code == "PORTAL-0901" and self._password:
+                self._try_password_change_delay(body)
+                raise DaouAuthError(
+                    "PORTAL-0901 — retrying login after password-change delay",
+                    code="PORTAL-0901",
+                )
+            raise DaouAuthError(f"Refresh rejected: {body}", code=refresh_code)
         new_access = self._client.cookies.get("AccessToken", "")
         if not new_access:
             raise DaouAuthError("Refresh response did not set a new AccessToken")
