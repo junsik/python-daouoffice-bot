@@ -28,7 +28,7 @@ import logging
 import os
 from collections.abc import Awaitable, Callable
 
-from daouoffice.client import BotClient, NewMessage, parse_mentions
+from daouoffice.client import BotClient, ChatRoomItem, NewMessage, parse_mentions
 from daouoffice.markdown import to_chat_html
 from daouoffice.state import CursorStore, MemoryCursorStore
 
@@ -62,6 +62,9 @@ POLL_INTERVAL = 5
 OnMessageCallback = Callable[[NewMessage], Awaitable[str | None]]
 """Async callback: receives a NewMessage, returns a reply string or None."""
 
+RoomFilter = Callable[[ChatRoomItem], bool]
+"""Predicate deciding whether a room may be fetched and marked read."""
+
 
 class BotEngine:
     """REST polling bot engine.
@@ -82,6 +85,9 @@ class BotEngine:
             :class:`~daouoffice.state.FileCursorStore` to resume after restart.
         max_attempts: give up on a single message after this many failed
             handler attempts and move on (poison-message guard).
+        room_filter: Optional predicate applied to rooms before history fetch
+            and read acknowledgements. Host apps can use this to enforce an
+            allowlist at the transport boundary.
         markdown: render each handler reply from Markdown to the chat-HTML
             subset (bold/italic/lists) before sending. Off by default —
             replies are sent verbatim.
@@ -95,6 +101,7 @@ class BotEngine:
         poll_interval: int = POLL_INTERVAL,
         cursors: CursorStore | None = None,
         max_attempts: int = 5,
+        room_filter: RoomFilter | None = None,
         markdown: bool = False,
     ) -> None:
         self._client = client
@@ -102,6 +109,7 @@ class BotEngine:
         self._poll_interval = poll_interval
         self._running = False
         self._max_attempts = max_attempts
+        self._room_filter = room_filter
         self._render = to_chat_html if markdown else None
         # room_id -> highest chatMessageId already handled
         self._cursors: CursorStore = cursors or MemoryCursorStore()
@@ -167,6 +175,8 @@ class BotEngine:
     async def _poll_once(self) -> None:
         rooms = await asyncio.to_thread(self._client.get_rooms)
         for room in rooms:
+            if self._room_filter is not None and not self._room_filter(room):
+                continue
             cursor = self._cursors.get(room.roomId)
             # Source of truth is the cursor vs. the room's newest message id,
             # NOT the unread badge — the bot clears that badge via mark_read,

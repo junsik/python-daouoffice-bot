@@ -1,0 +1,14 @@
+.git/
+.venv/
+.daoubot/
+.claude/
+.ruff_cache/
+.scrape-kit/
+__pycache__/
+.pytest_cache/
+.mypy_cache/
+.coverage
+*.pyc
+dist/
+build/
+*.egg-info/

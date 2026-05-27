@@ -42,7 +42,7 @@ from collections.abc import Awaitable, Callable
 
 from daouoffice.client import BotClient, DaouAuthError, DaouConfigError, NewMessage
 from daouoffice.config import load_settings
-from daouoffice.engine import POLL_INTERVAL, BotEngine
+from daouoffice.engine import POLL_INTERVAL, BotEngine, RoomFilter
 from daouoffice.profile import Profile, load_profile, save_profile
 from daouoffice.state import CursorStore, FileCursorStore
 
@@ -81,6 +81,7 @@ def _build_client(
         company_id=company_id,
         login_id=login_id,
         password=password,
+        profile_base_dir=base_dir,
         app_config=app_config,
     )
     prof = load_profile(base_dir)
@@ -104,12 +105,22 @@ def _build_client(
             base_dir,
         )
 
+    company_id = s.company_id
+    if s.password and not company_id:
+        info = BotClient.discover_company(s.base_url)
+        company_id = str(info.get("id") or info.get("companyId") or "")
+        if not company_id:
+            raise DaouConfigError(
+                "company_id could not be discovered from base_url; pass "
+                "company_id=..., set DAOU_COMPANY_ID, or run `daoubot discover`."
+            )
+
     if s.password:
         return BotClient(
             s.login_id,
             s.password,
             base_url=s.base_url,
-            company_id=s.company_id,
+            company_id=company_id,
             on_auth=_persist,
         )
     if prof and prof.access_token:
@@ -139,7 +150,9 @@ class DaouBot:
     Args:
         base_url / company_id / login_id / password: connection overrides;
             normally resolved from the profile (login_id) / env, so a bot is
-            just ``DaouBot(on_message=...)``.
+            just ``DaouBot(on_message=...)``. If a password login is configured
+            but ``company_id`` is omitted, the SDK discovers it from
+            ``base_url`` before login.
         app_config: path to an operator YAML whose ``daouoffice:`` section
             provides connection values (``base_url`` / ``company_id`` /
             ``login_id`` / ``password``) — read-only, never overwritten by
@@ -159,6 +172,9 @@ class DaouBot:
         cursor_store: where the processed-message cursor is persisted; default
             :class:`~daouoffice.state.FileCursorStore` (resume after restart).
         max_attempts: poison-message guard (delivery is always at-least-once).
+        room_filter: optional predicate applied before the SDK fetches room
+            history or marks a room read. Host apps can enforce allowlists here
+            so filtered rooms are not opened by the polling loop.
         markdown: render replies from Markdown to the chat's HTML subset
             (``**bold**``/``*italic*``/numbered + bullet lists; the only
             styles the chat honors). Off by default — replies sent verbatim.
@@ -176,6 +192,7 @@ class DaouBot:
         poll_interval: int = POLL_INTERVAL,
         cursor_store: CursorStore | None = None,
         max_attempts: int = 5,
+        room_filter: RoomFilter | None = None,
         markdown: bool = False,
         client: BotClient | None = None,
         base_dir: str | os.PathLike[str] | None = None,
@@ -196,6 +213,7 @@ class DaouBot:
             poll_interval=poll_interval,
             cursors=cursor_store or FileCursorStore(base_dir),
             max_attempts=max_attempts,
+            room_filter=room_filter,
             markdown=markdown,
         )
 

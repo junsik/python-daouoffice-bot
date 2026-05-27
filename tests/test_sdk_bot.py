@@ -28,6 +28,15 @@ def test_explicit_cursor_store_overrides_base_dir(tmp_path) -> None:
     assert not (tmp_path / ".daoubot" / "cursors.json").exists()
 
 
+def test_room_filter_is_threaded_into_engine() -> None:
+    def room_filter(room) -> bool:
+        return room.roomId == "allowed"
+
+    bot = DaouBot(client=_StubClient(), room_filter=room_filter)
+
+    assert bot._engine._room_filter is room_filter
+
+
 def test_build_client_threads_base_dir_into_load_profile(tmp_path, monkeypatch) -> None:
     seen: list = []
 
@@ -45,3 +54,25 @@ def test_build_client_threads_base_dir_into_load_profile(tmp_path, monkeypatch) 
     )
     assert seen == [tmp_path]
     assert client is not None
+
+
+def test_build_client_discovers_company_id_for_password_login(tmp_path, monkeypatch) -> None:
+    seen: list[str] = []
+    monkeypatch.delenv("DAOU_COMPANY_ID", raising=False)
+
+    def _discover(base_url: str):
+        seen.append(base_url)
+        return {"companyId": "22000"}
+
+    monkeypatch.setattr(sdk_bot.BotClient, "discover_company", _discover)
+
+    client = _build_client(
+        base_url="https://acme.daouoffice.com",
+        company_id=None,
+        login_id="acme-bot",
+        password="pw",
+        base_dir=tmp_path,
+    )
+
+    assert seen == ["https://acme.daouoffice.com"]
+    assert client._company_id == "22000"

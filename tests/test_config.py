@@ -52,6 +52,25 @@ def test_profile_fallback_includes_password(tmp_path, monkeypatch) -> None:
     assert load_settings().password == "pw"
 
 
+def test_profile_base_dir_is_used_for_profile_fallback(tmp_path) -> None:
+    save_profile(
+        Profile(
+            base_url="https://isolated.daouoffice.com",
+            company_id="22000",
+            login_id="isolated-bot",
+            access_token="tok",
+            password="stored-pw",
+        ),
+        base_dir=tmp_path,
+    )
+
+    s = load_settings(profile_base_dir=tmp_path)
+
+    assert s.base_url == "https://isolated.daouoffice.com"
+    assert s.company_id == "22000"
+    assert s.login_id == "isolated-bot"
+
+
 def test_explicit_arg_overrides_env(monkeypatch) -> None:
     monkeypatch.setenv("DAOU_BASE_URL", "https://env.daouoffice.com")
     s = load_settings(base_url="https://explicit.daouoffice.com")

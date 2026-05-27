@@ -163,6 +163,47 @@ async def test_truly_empty_message_is_still_dropped() -> None:
 
 
 @pytest.mark.asyncio
+async def test_room_filter_prevents_history_fetch_and_read_ack() -> None:
+    class FilterClient:
+        user_id = "BOT"
+
+        def __init__(self) -> None:
+            self.history_rooms: list[str] = []
+            self.read_rooms: list[str] = []
+
+        def get_rooms(self):
+            return [
+                ChatRoomItem(roomId="r1", roomType="GROUP", unreadMessageCount=1),
+                ChatRoomItem(roomId="r2", roomType="GROUP", unreadMessageCount=1),
+            ]
+
+        def get_chat_history(self, room_id: str, *, offset: int = 20):
+            self.history_rooms.append(room_id)
+            return [
+                ChatHistoryItem(
+                    chatRoomId=room_id,
+                    chatMessageId=1,
+                    sender={"platformUserId": "USER", "platformUserName": "Tester"},
+                    contents={"message": {"text": room_id}},
+                )
+            ]
+
+        def mark_read(self, message_id, room_id) -> None:
+            self.read_rooms.append(room_id)
+
+        def send_message(self, room_id: str, content: str, *, reply_to=None) -> str:
+            return "cmid"
+
+    client = FilterClient()
+    engine = BotEngine(client, _echo, room_filter=lambda room: room.roomId == "r2")
+
+    await _poll(engine)
+
+    assert client.history_rooms == ["r2"]
+    assert client.read_rooms == ["r2"]
+
+
+@pytest.mark.asyncio
 async def test_skips_own_messages_but_advances_baseline() -> None:
     client = FakeClient([_msg("USER", "old", 1)])
     engine = BotEngine(client, _echo)

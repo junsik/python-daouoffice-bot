@@ -90,13 +90,14 @@ def load_settings(
     password: str | None = None,
     use_profile: bool = True,
     config_path: str | None = None,
+    profile_base_dir: str | os.PathLike[str] | None = None,
     app_config: str | os.PathLike[str] | None = None,
 ) -> Settings:
     """Resolve connection settings (arg > env > app config > profile).
 
     ``config_path`` points at an explicit profile file (the CLI
-    ``--config``); otherwise the default ``~/.daoubot/profile.yaml`` is
-    used. ``app_config`` points at an operator YAML whose ``daouoffice:``
+    ``--config``); otherwise ``<profile_base_dir or ~>/.daoubot/profile.yaml``
+    is used. ``app_config`` points at an operator YAML whose ``daouoffice:``
     section provides connection values when the operator prefers a
     single declarative file over ``daoubot login``; resolved from the
     arg, then ``DAOU_APP_CONFIG`` env.
@@ -104,7 +105,7 @@ def load_settings(
     Raises:
         DaouConfigError: if ``base_url`` cannot be resolved.
     """
-    prof = load_profile(path=config_path) if use_profile else None
+    prof = load_profile(profile_base_dir, path=config_path) if use_profile else None
     app_path = app_config or os.getenv("DAOU_APP_CONFIG")
     app = load_app_config(app_path) if app_path else {}
 
