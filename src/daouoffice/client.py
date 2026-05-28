@@ -150,6 +150,44 @@ class RoomOpenData(BaseModel):
     backgroundColor: str | None = None
 
 
+class OrganizationMember(BaseModel):
+    """A user record from the organization tree.
+
+    The organization tree returns mixed COMPANY / DEPARTMENT / MEMBER nodes;
+    ``BotClient.get_user`` walks the tree and returns only the MEMBER entry
+    whose ``userId`` matches the request. Fields here are the subset that
+    capture-verified responses populate consistently — extra wire fields are
+    ignored.
+    """
+
+    model_config = ConfigDict(extra="ignore")
+
+    userId: str
+    loginId: str = ""
+    name: str = ""
+    email: str = ""
+    userStatus: str = ""
+    employeeNumber: str | None = None
+    positionName: str = ""
+    dutyName: str = ""
+    departmentId: str = ""
+    departmentName: str = ""
+    departmentNamePath: str = ""
+    profileImagePath: str | None = None
+
+    @field_validator("employeeNumber", "profileImagePath", mode="before")
+    @classmethod
+    def _none_passthrough(cls, v: object) -> object:
+        return v
+
+    @field_validator("loginId", "name", "email", "userStatus", "positionName",
+                     "dutyName", "departmentId", "departmentName",
+                     "departmentNamePath", mode="before")
+    @classmethod
+    def _none_to_empty(cls, v: object) -> object:
+        return "" if v is None else v
+
+
 # Inline mention token in content.message (see docs/api/03-messages.md §3.6):
 #   {{<uuid>::USER::@<name>::<userId>}}   or   {{<uuid>::ALL::@ALL}}
 _MENTION_RE = re.compile(
@@ -771,3 +809,82 @@ class BotClient:
             f"/api/chat/message/{message_id}/read",
             json={"chatRoomId": str(room_id)},
         )
+
+    # -- Organization / users ------------------------------------------
+
+    def get_user(self, user_id: str | int) -> OrganizationMember | None:
+        """Resolve a platform user id to a corporate record.
+
+        Uses ``GET /api/portal/common/organization/tree`` with
+        ``targetUserId`` so the response expands the tree around the
+        requested user. The endpoint returns the target user plus their
+        department peers; this method walks the tree and returns the MEMBER
+        node whose ``userId`` matches the request. Returns ``None`` when the
+        user is not present (e.g. removed, inactive, or outside the visible
+        org scope).
+
+        The response also includes peer members — callers that want to
+        warm a directory cache can use :meth:`get_user_peers` instead.
+        """
+        target = str(user_id)
+        if not target:
+            return None
+        tree = self._fetch_user_tree(target)
+        for member in _walk_member_nodes(tree):
+            if str(member.get("userId", "")) == target:
+                return OrganizationMember.model_validate(member)
+        return None
+
+    def get_user_peers(self, user_id: str | int) -> list[OrganizationMember]:
+        """Return every MEMBER record reachable from a ``targetUserId`` query.
+
+        Useful for bulk-populating a user-directory cache: a single HTTP
+        call typically yields the target user plus all of their direct
+        department colleagues.
+        """
+        target = str(user_id)
+        if not target:
+            return []
+        tree = self._fetch_user_tree(target)
+        return [
+            OrganizationMember.model_validate(member)
+            for member in _walk_member_nodes(tree)
+        ]
+
+    def _fetch_user_tree(self, target_user_id: str) -> list[dict]:
+        resp = self._api(
+            "GET",
+            "/api/portal/common/organization/tree",
+            params={
+                "targetUserId": target_user_id,
+                "shouldApplyOrganizationChartExpansion": "true",
+            },
+        )
+        resp.raise_for_status()
+        data = resp.json().get("data", {})
+        if isinstance(data, dict):
+            elements = data.get("elements") or []
+        elif isinstance(data, list):
+            elements = data
+        else:
+            elements = []
+        return elements
+
+
+def _walk_member_nodes(nodes: list[dict]):
+    """Yield every ``nodeType == 'MEMBER'`` dict reachable from ``nodes``.
+
+    The organization tree mixes COMPANY / DEPARTMENT / MEMBER nodes with
+    nested ``childrenList``; recursion is bounded by the tenant's department
+    depth and stays cheap in practice.
+    """
+    if not nodes:
+        return
+    for node in nodes:
+        if not isinstance(node, dict):
+            continue
+        if node.get("nodeType") == "MEMBER":
+            yield node
+        children = node.get("childrenList")
+        if isinstance(children, list) and children:
+            yield from _walk_member_nodes(children)

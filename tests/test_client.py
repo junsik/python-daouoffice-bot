@@ -13,6 +13,7 @@ from daouoffice.client import (
     ChatHistoryItem,
     DaouAuthError,
     DaouConfigError,
+    OrganizationMember,
 )
 
 BASE = "https://acme.daouoffice.com"
@@ -359,3 +360,141 @@ def test_chat_history_item_tolerates_null_fields() -> None:
     assert item.contents == {}
     assert item.metadata == {}
     assert item.messageStatus == ""
+
+
+# Capture-shaped fixture mirroring the real
+# /api/portal/common/organization/tree?targetUserId=... response: the tree
+# has nested COMPANY -> DEPARTMENT -> MEMBER nodes, and MEMBER nodes can
+# also appear at sibling depths.
+_ORG_TREE_RESPONSE = {
+    "data": {
+        "elements": [
+            {
+                "id": "C1",
+                "name": "Acme Corp",
+                "nodeType": "COMPANY",
+                "childrenList": [
+                    {
+                        "id": "D1",
+                        "name": "Engineering",
+                        "nodeType": "DEPARTMENT",
+                        "childrenList": [
+                            {
+                                "id": "M1",
+                                "name": "Junsik Park",
+                                "nodeType": "MEMBER",
+                                "userId": "11000022612",
+                                "loginId": "junsik.park",
+                                "email": "junsik.park@acme.co.kr",
+                                "userStatus": "NORMAL",
+                                "employeeNumber": "2315",
+                                "positionName": "부장",
+                                "dutyName": "팀장",
+                                "departmentId": "D1",
+                                "departmentName": "Engineering",
+                                "departmentNamePath": "Acme Corp > Engineering",
+                                "profileImagePath": "OPERATION/abc.png",
+                            },
+                            {
+                                "id": "M2",
+                                "name": "Kyunghern Lee",
+                                "nodeType": "MEMBER",
+                                "userId": "11000022611",
+                                "loginId": "kyunghern.lee",
+                                "email": "kyunghern.lee@acme.co.kr",
+                                "userStatus": "NORMAL",
+                                "employeeNumber": None,
+                                "positionName": "마스터",
+                                "dutyName": None,
+                                "departmentId": "D1",
+                                "departmentName": "Engineering",
+                                "departmentNamePath": "Acme Corp > Engineering",
+                                "profileImagePath": None,
+                            },
+                        ],
+                    },
+                ],
+            },
+        ],
+    },
+}
+
+
+@respx.mock
+def test_get_user_walks_org_tree_and_returns_member() -> None:
+    _login_routes(respx.mock)
+    route = respx.get("/api/portal/common/organization/tree").mock(
+        return_value=httpx.Response(200, json=_ORG_TREE_RESPONSE)
+    )
+    client = BotClient("acme-bot", "p", base_url=BASE, company_id="11000")
+    client.login()
+
+    member = client.get_user("11000022612")
+
+    assert member is not None
+    assert member.userId == "11000022612"
+    assert member.loginId == "junsik.park"
+    assert member.email == "junsik.park@acme.co.kr"
+    assert member.name == "Junsik Park"
+    assert member.departmentNamePath == "Acme Corp > Engineering"
+    # targetUserId pins the response to the requested user
+    request = route.calls.last.request
+    assert request.url.params["targetUserId"] == "11000022612"
+    assert request.url.params["shouldApplyOrganizationChartExpansion"] == "true"
+
+
+@respx.mock
+def test_get_user_returns_none_when_user_absent() -> None:
+    _login_routes(respx.mock)
+    respx.get("/api/portal/common/organization/tree").mock(
+        return_value=httpx.Response(200, json=_ORG_TREE_RESPONSE)
+    )
+    client = BotClient("acme-bot", "p", base_url=BASE, company_id="11000")
+    client.login()
+
+    assert client.get_user("99999999999") is None
+
+
+def test_get_user_rejects_empty_id() -> None:
+    client = BotClient("u", "p", base_url=BASE)
+    assert client.get_user("") is None
+
+
+@respx.mock
+def test_get_user_peers_returns_all_member_nodes() -> None:
+    _login_routes(respx.mock)
+    respx.get("/api/portal/common/organization/tree").mock(
+        return_value=httpx.Response(200, json=_ORG_TREE_RESPONSE)
+    )
+    client = BotClient("acme-bot", "p", base_url=BASE, company_id="11000")
+    client.login()
+
+    peers = client.get_user_peers("11000022612")
+
+    assert {p.userId for p in peers} == {"11000022612", "11000022611"}
+
+
+def test_organization_member_tolerates_null_strings() -> None:
+    # The capture has dutyName/employeeNumber/profileImagePath as JSON null;
+    # the model must accept those and coerce strings to "" where appropriate.
+    member = OrganizationMember.model_validate(
+        {
+            "userId": "U1",
+            "loginId": None,
+            "name": None,
+            "email": None,
+            "userStatus": None,
+            "employeeNumber": None,
+            "positionName": None,
+            "dutyName": None,
+            "departmentId": None,
+            "departmentName": None,
+            "departmentNamePath": None,
+            "profileImagePath": None,
+        }
+    )
+    assert member.userId == "U1"
+    assert member.loginId == ""
+    assert member.email == ""
+    assert member.employeeNumber is None
+    assert member.profileImagePath is None
