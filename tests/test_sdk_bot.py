@@ -12,6 +12,23 @@ class _StubClient:
 
     user_id = "BOT"
 
+    def _can_relogin(self) -> bool:
+        return False
+
+    def whoami(self):
+        return object()
+
+
+class _LoginClient(_StubClient):
+    def __init__(self) -> None:
+        self.login_count = 0
+
+    def _can_relogin(self) -> bool:
+        return True
+
+    def login(self) -> None:
+        self.login_count += 1
+
 
 def test_base_dir_relocates_default_cursor_store(tmp_path) -> None:
     bot = DaouBot(client=_StubClient(), base_dir=tmp_path)
@@ -76,3 +93,44 @@ def test_build_client_discovers_company_id_for_password_login(tmp_path, monkeypa
 
     assert seen == ["https://acme.daouoffice.com"]
     assert client._company_id == "22000"
+
+
+async def test_authenticate_logs_in_when_client_can_relogin() -> None:
+    client = _LoginClient()
+    bot = DaouBot(client=client, cursor_store=MemoryCursorStore())
+
+    await bot.authenticate()
+
+    assert client.login_count == 1
+
+
+async def test_poll_forever_delegates_to_engine_start() -> None:
+    called: list[bool] = []
+    bot = DaouBot(client=_StubClient(), cursor_store=MemoryCursorStore())
+
+    async def _start() -> None:
+        called.append(True)
+
+    bot._engine.start = _start
+
+    await bot.poll_forever()
+
+    assert called == [True]
+
+
+async def test_start_authenticates_then_polls() -> None:
+    calls: list[str] = []
+    bot = DaouBot(client=_StubClient(), cursor_store=MemoryCursorStore())
+
+    async def _authenticate() -> None:
+        calls.append("authenticate")
+
+    async def _poll_forever() -> None:
+        calls.append("poll")
+
+    bot.authenticate = _authenticate
+    bot.poll_forever = _poll_forever
+
+    await bot.start()
+
+    assert calls == ["authenticate", "poll"]

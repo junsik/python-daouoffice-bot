@@ -226,8 +226,8 @@ class DaouBot:
         """Set/replace the message handler."""
         self._handler = on_message
 
-    async def start(self) -> None:
-        """Authenticate and run the polling engine until stopped.
+    async def authenticate(self) -> None:
+        """Authenticate the underlying client without starting polling.
 
         With credentials the bot logs in and thereafter re-authenticates
         itself on token expiry (background case). Token-only (a saved
@@ -239,7 +239,15 @@ class DaouBot:
             await asyncio.to_thread(self._client.login)
         else:
             await asyncio.to_thread(self._resolve_identity)
+
+    async def poll_forever(self) -> None:
+        """Run the polling engine until :meth:`stop` is called."""
         await self._engine.start()
+
+    async def start(self) -> None:
+        """Authenticate and run the polling engine until stopped."""
+        await self.authenticate()
+        await self.poll_forever()
 
     def _resolve_identity(self) -> None:
         try:
