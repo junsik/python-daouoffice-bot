@@ -71,3 +71,49 @@ def test_unsupported_markdown_degrades_to_literal_text() -> None:
 
 def test_leading_and_trailing_blank_lines_trimmed() -> None:
     assert to_chat_html("\n\nhi\n\n") == "hi"
+
+
+def test_table_header_dropped_body_becomes_bullets() -> None:
+    md = "| key | status | summary |\n|---|---|---|\n| SCV-114 | Open | foo |\n| RPA-674 | Done | bar |"
+    assert to_chat_html(md) == (
+        "<ul>"
+        "<li>SCV-114 — Open — foo</li>"
+        "<li>RPA-674 — Done — bar</li>"
+        "</ul>"
+    )
+
+
+def test_table_without_outer_pipes_also_recognised() -> None:
+    md = "a | b\n---|---\n1 | 2"
+    assert to_chat_html(md) == "<ul><li>1 — 2</li></ul>"
+
+
+def test_table_separator_with_alignment_colons_accepted() -> None:
+    md = "| x | y |\n|:---|---:|\n| 9 | 8 |"
+    assert to_chat_html(md) == "<ul><li>9 — 8</li></ul>"
+
+
+def test_table_cell_inline_styles_and_links_render() -> None:
+    md = "| col |\n|---|\n| **bold** [d](http://e.com) |"
+    assert to_chat_html(md) == '<ul><li><b>bold</b> <a href="http://e.com">d</a></li></ul>'
+
+
+def test_table_cell_html_is_escaped() -> None:
+    md = "| col |\n|---|\n| <script>x</script> |"
+    assert to_chat_html(md) == "<ul><li>&lt;script&gt;x&lt;/script&gt;</li></ul>"
+
+
+def test_text_then_table_with_blank_line() -> None:
+    md = "intro\n\n| h |\n|---|\n| body |"
+    assert to_chat_html(md) == "intro<br><ul><li>body</li></ul>"
+
+
+def test_header_separator_without_body_falls_back_to_text() -> None:
+    # Empty body would emit an empty <ul>; degrade to literal text so the
+    # user still sees the header.
+    assert to_chat_html("| h |\n|---|") == "| h |<br>|---|"
+
+
+def test_lone_pipe_line_is_not_a_table() -> None:
+    # No separator after — must render as plain text, not silently disappear.
+    assert to_chat_html("| just a pipe |") == "| just a pipe |"
