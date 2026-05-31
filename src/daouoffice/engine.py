@@ -65,6 +65,9 @@ OnMessageCallback = Callable[[NewMessage], Awaitable[str | None]]
 RoomFilter = Callable[[ChatRoomItem], bool]
 """Predicate deciding whether a room may be fetched and marked read."""
 
+OnReplySentCallback = Callable[[NewMessage, str, str], Awaitable[None]]
+"""Async callback invoked after a handler reply is posted to DaouOffice."""
+
 
 class BotEngine:
     """REST polling bot engine.
@@ -103,6 +106,7 @@ class BotEngine:
         max_attempts: int = 5,
         room_filter: RoomFilter | None = None,
         markdown: bool = False,
+        on_reply_sent: OnReplySentCallback | None = None,
     ) -> None:
         self._client = client
         self._on_message = on_message
@@ -111,6 +115,7 @@ class BotEngine:
         self._max_attempts = max_attempts
         self._room_filter = room_filter
         self._render = to_chat_html if markdown else None
+        self._on_reply_sent = on_reply_sent
         # room_id -> highest chatMessageId already handled
         self._cursors: CursorStore = cursors or MemoryCursorStore()
         # "room_id:mid" -> failed handler attempts
@@ -186,6 +191,13 @@ class BotEngine:
             if cursor is None:
                 if room.unreadMessageCount > 0:
                     self._schedule_room(room.roomId, room.roomType)
+                elif room.latest_message_id is not None:
+                    self._cursors.set(room.roomId, room.latest_message_id)
+                    logger.info(
+                        "Room %s: baseline at %s (no unread backlog)",
+                        room.roomId,
+                        room.latest_message_id,
+                    )
                 continue
             latest = room.latest_message_id
             if (latest is not None and latest > cursor) or room.unreadMessageCount > 0:
@@ -347,12 +359,14 @@ class BotEngine:
                 # message — post it as a threaded reply so the quote shows
                 # what it answers (not a policy knob; reply attribution is a
                 # delivery detail the SDK owns, like at-least-once).
-                await asyncio.to_thread(
+                sent_id = await asyncio.to_thread(
                     self._client.send_message,
                     msg.room_id,
                     reply,
                     reply_to=msg.message_id,
                 )
+                if self._on_reply_sent is not None:
+                    await self._on_reply_sent(msg, reply, str(sent_id or ""))
                 logger.debug("Replied to [%s] (re: %s)", msg.room_id, msg.message_id)
             return True
         except Exception:

@@ -42,7 +42,7 @@ from collections.abc import Awaitable, Callable
 
 from daouoffice.client import BotClient, DaouAuthError, DaouConfigError, NewMessage
 from daouoffice.config import load_settings
-from daouoffice.engine import POLL_INTERVAL, BotEngine, RoomFilter
+from daouoffice.engine import POLL_INTERVAL, BotEngine, OnReplySentCallback, RoomFilter
 from daouoffice.profile import Profile, load_profile, save_profile
 from daouoffice.state import CursorStore, FileCursorStore
 
@@ -168,6 +168,9 @@ class DaouBot:
         on_message: the message handler ``(NewMessage) -> str | None`` (sync
             or async); ``None`` reply = no reply. Omit to only read/mark.
             Pass a :class:`~daouoffice.RoomRouter` for per-room dispatch.
+        on_reply_sent: optional async callback invoked after a handler reply is
+            posted to DaouOffice. Host apps can use it to release work that must
+            start only after the user has seen an acknowledgement.
         poll_interval: seconds between poll cycles.
         cursor_store: where the processed-message cursor is persisted; default
             :class:`~daouoffice.state.FileCursorStore` (resume after restart).
@@ -189,6 +192,7 @@ class DaouBot:
         login_id: str | None = None,
         password: str | None = None,
         on_message: MessageHandler | None = None,
+        on_reply_sent: OnReplySentCallback | None = None,
         poll_interval: int = POLL_INTERVAL,
         cursor_store: CursorStore | None = None,
         max_attempts: int = 5,
@@ -215,6 +219,7 @@ class DaouBot:
             max_attempts=max_attempts,
             room_filter=room_filter,
             markdown=markdown,
+            on_reply_sent=on_reply_sent,
         )
 
     @property

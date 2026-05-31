@@ -96,6 +96,38 @@ async def test_first_poll_sets_baseline_without_replay() -> None:
 
 
 @pytest.mark.asyncio
+async def test_first_poll_sets_cursor_for_read_room_without_fetching_history() -> None:
+    class ReadRoomClient(FakeClient):
+        def __init__(self) -> None:
+            super().__init__([])
+            self.history_fetched = False
+
+        def get_rooms(self) -> list[ChatRoomItem]:
+            return [
+                ChatRoomItem(
+                    roomId="r1",
+                    roomType="GROUP",
+                    unreadMessageCount=0,
+                    latestMessage={"chatMessageId": 10},
+                )
+            ]
+
+        def get_chat_history(self, room_id: str, *, offset: int = 20):
+            self.history_fetched = True
+            return []
+
+    client = ReadRoomClient()
+    cursors = MemoryCursorStore()
+    engine = BotEngine(client, _echo, cursors=cursors)
+
+    await _poll(engine)
+
+    assert cursors.get("r1") == 10
+    assert client.history_fetched is False
+    assert client.read == []
+
+
+@pytest.mark.asyncio
 async def test_new_message_dispatched_once() -> None:
     client = FakeClient([_msg("USER", "old", 1)])
     engine = BotEngine(client, _echo)
@@ -107,6 +139,23 @@ async def test_new_message_dispatched_once() -> None:
 
     await _poll(engine)  # same history → no repeat
     assert client.sent == [("r1", "re: hello", "2")]
+
+
+@pytest.mark.asyncio
+async def test_reply_sent_callback_runs_after_reply_post() -> None:
+    client = FakeClient([_msg("USER", "old", 1)])
+    events: list[tuple[str, str, str, list[tuple[str, str, str | None]]]] = []
+
+    async def after_reply(msg, reply, sent_id):
+        events.append((msg.message_id, reply, sent_id, list(client.sent)))
+
+    engine = BotEngine(client, _echo, on_reply_sent=after_reply)
+    await _poll(engine)
+
+    client.history = [_msg("USER", "old", 1), _msg("USER", "hello", 2)]
+    await _poll(engine)
+
+    assert events == [("2", "re: hello", "cmid", [("r1", "re: hello", "2")])]
 
 
 @pytest.mark.asyncio
