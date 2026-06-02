@@ -525,3 +525,32 @@ async def test_slow_room_does_not_block_other_rooms_or_poll() -> None:
     gate.set()
     await engine._join()
     assert ("r1", "re: r1", "1") in client.sent
+
+
+def test_null_text_message_coerced_not_none() -> None:
+    # A file-only / system message can carry ``text: null`` plus attachments.
+    # _to_message must yield message_text="" (never None), so the eager
+    # ``message_text[:80]`` debug log and downstream handlers don't crash.
+    engine = BotEngine(FakeClient([]), _echo)
+    item = ChatHistoryItem(
+        chatRoomId="r1",
+        chatMessageId=7,
+        sender={"platformUserId": "USER", "platformUserName": "Tester"},
+        contents={"message": {"text": None}, "attachmentList": [{"name": "a.png"}]},
+    )
+    msg = engine._to_message(item, "GROUP")
+    assert msg is not None
+    assert msg.message_text == ""
+    assert msg.attachments == [{"name": "a.png"}]
+
+
+def test_null_text_without_attachment_is_dropped() -> None:
+    # Truly empty payload (no text, no attachment) is a system notice → None.
+    engine = BotEngine(FakeClient([]), _echo)
+    item = ChatHistoryItem(
+        chatRoomId="r1",
+        chatMessageId=8,
+        sender={"platformUserId": "USER", "platformUserName": "Tester"},
+        contents={"message": {"text": None}},
+    )
+    assert engine._to_message(item, "GROUP") is None

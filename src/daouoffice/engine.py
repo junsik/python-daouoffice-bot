@@ -322,7 +322,10 @@ class BotEngine:
     def _to_message(self, item, room_type: str) -> NewMessage | None:
         sender = item.sender or {}
         contents = item.contents or {}
-        raw = contents.get("message", {}).get("text", "")
+        # ``text`` may be missing OR explicitly null (file-only / system
+        # messages), so coalesce to "" — a None here would crash downstream
+        # slicing/handlers that assume message_text is always a string.
+        raw = contents.get("message", {}).get("text") or ""
         attachments = contents.get("attachmentList") or []
         # Drop only truly empty payloads (system/member-left notices). A
         # file-only message has empty text but a non-empty attachmentList —
