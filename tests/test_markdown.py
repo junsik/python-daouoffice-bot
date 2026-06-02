@@ -74,12 +74,12 @@ def test_leading_and_trailing_blank_lines_trimmed() -> None:
 
 
 def test_table_header_dropped_body_becomes_bullets() -> None:
-    md = "| key | status | summary |\n|---|---|---|\n| SCV-114 | Open | foo |\n| RPA-674 | Done | bar |"
+    md = (
+        "| key | status | summary |\n|---|---|---|\n"
+        "| SCV-114 | Open | foo |\n| RPA-674 | Done | bar |"
+    )
     assert to_chat_html(md) == (
-        "<ul>"
-        "<li>SCV-114 — Open — foo</li>"
-        "<li>RPA-674 — Done — bar</li>"
-        "</ul>"
+        "<ul><li>SCV-114 — Open — foo</li><li>RPA-674 — Done — bar</li></ul>"
     )
 
 
@@ -117,3 +117,25 @@ def test_header_separator_without_body_falls_back_to_text() -> None:
 def test_lone_pipe_line_is_not_a_table() -> None:
     # No separator after — must render as plain text, not silently disappear.
     assert to_chat_html("| just a pipe |") == "| just a pipe |"
+
+
+def test_nested_unordered_list_indents() -> None:
+    md = "- A\n  - a1\n  - a2\n- B"
+    assert to_chat_html(md) == ("<ul><li>A<ul><li>a1</li><li>a2</li></ul></li><li>B</li></ul>")
+
+
+def test_nested_list_three_levels() -> None:
+    md = "- A\n  - a1\n    - a1x\n- B"
+    assert to_chat_html(md) == (
+        "<ul><li>A<ul><li>a1<ul><li>a1x</li></ul></li></ul></li><li>B</li></ul>"
+    )
+
+
+def test_nested_mixed_ordered_under_unordered() -> None:
+    md = "- top\n  1. one\n  2. two"
+    assert to_chat_html(md) == ("<ul><li>top<ol><li>one</li><li>two</li></ol></li></ul>")
+
+
+def test_nested_list_inline_styles_preserved() -> None:
+    md = "- **head**\n  - detail"
+    assert to_chat_html(md) == ("<ul><li><b>head</b><ul><li>detail</li></ul></li></ul>")

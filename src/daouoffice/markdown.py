@@ -12,7 +12,9 @@ So this converts only the Markdown that maps onto that subset:
 * ``*italic*`` / ``_italic_``        → ``<i>…</i>``
 * ``[text](url)``                    → ``<a href="url">text</a>``
 * ``1.`` / ``2)`` lines              → ``<ol><li>…</li>…</ol>``
-* ``-`` / ``*`` / ``+`` lines        → ``<ul><li>…</li>…</ul>``
+* ``-`` / ``*`` / ``+`` lines        → ``<ul><li>…</li>…</ul>``; leading
+  indentation nests sub-items into an inner ``<ul>``/``<ol>`` so the chat
+  client indents them instead of flattening every bullet to one level
 * ``| a | b |`` / ``|---|---|`` rows → ``<ul><li>a — b</li>…</ul>`` (the chat
   client has no table tag, so a GFM-style table degrades into a bulleted
   list; the header row is dropped because column labels don't align in a
@@ -36,8 +38,9 @@ from __future__ import annotations
 import html
 import re
 
-_OL = re.compile(r"\s*\d+[.)]\s+(.*)")
-_UL = re.compile(r"\s*[-*+]\s+(.*)")
+# A list item: leading indent (spaces/tabs) decides nesting depth, then an
+# ordered (``1.`` / ``2)``) or unordered (``-`` / ``*`` / ``+``) marker.
+_LIST_ITEM = re.compile(r"([ \t]*)(\d+[.)]|[-*+])[ \t]+(.*)")
 # A GFM-style table row has at least one '|' separator between two cells.
 # Leading / trailing '|' are optional in GFM and we accept either form.
 _TABLE_ROW = re.compile(r"\s*\|?[^|\n]*\|[^\n]*$")
@@ -66,6 +69,33 @@ def _split_table_cells(line: str) -> list[str]:
     if s.endswith("|"):
         s = s[:-1]
     return [c.strip() for c in s.split("|")]
+
+
+def _render_list_run(rows: list[tuple[int, bool, str]]) -> str:
+    """Render a run of list items into (possibly nested) ``<ul>``/``<ol>``.
+
+    Each row is ``(indent, ordered, text)``; ``indent`` is the leading
+    whitespace width (tabs expanded to 4). A deeper indent opens a nested
+    list inside the current ``<li>``; a shallower indent closes back out.
+    Same-indent items are siblings. Nesting lets the chat client indent
+    sub-items instead of flattening every bullet to one level.
+    """
+    out: list[str] = []
+    stack: list[tuple[int, bool]] = []  # (indent, ordered) per open list
+    for indent, ordered, text in rows:
+        while stack and indent < stack[-1][0]:
+            out.append("</li></ol>" if stack[-1][1] else "</li></ul>")
+            stack.pop()
+        if stack and indent <= stack[-1][0]:
+            out.append("</li>")  # sibling at the current level
+        else:
+            out.append("<ol>" if ordered else "<ul>")  # deeper: open nested list
+            stack.append((indent, ordered))
+        out.append(f"<li>{_inline(text)}")
+    while stack:
+        out.append("</li></ol>" if stack[-1][1] else "</li></ul>")
+        stack.pop()
+    return "".join(out)
 
 
 def _inline(text: str) -> str:
@@ -110,19 +140,13 @@ def to_chat_html(text: str) -> str:
     pieces: list[tuple[str, str]] = []
     i = 0
     while i < len(lines):
-        if _OL.fullmatch(lines[i]):
-            items = []
-            while i < len(lines) and (m := _OL.fullmatch(lines[i])):
-                items.append(f"<li>{_inline(m.group(1))}</li>")
+        if _LIST_ITEM.fullmatch(lines[i]):
+            rows: list[tuple[int, bool, str]] = []
+            while i < len(lines) and (m := _LIST_ITEM.fullmatch(lines[i])):
+                indent = len(m.group(1).expandtabs(4))
+                rows.append((indent, m.group(2)[0].isdigit(), m.group(3)))
                 i += 1
-            pieces.append(("list", "<ol>" + "".join(items) + "</ol>"))
-            continue
-        if _UL.fullmatch(lines[i]):
-            items = []
-            while i < len(lines) and (m := _UL.fullmatch(lines[i])):
-                items.append(f"<li>{_inline(m.group(1))}</li>")
-                i += 1
-            pieces.append(("list", "<ul>" + "".join(items) + "</ul>"))
+            pieces.append(("list", _render_list_run(rows)))
             continue
         # Table: header row + separator row + N data rows. Header row is
         # discarded — in a chat bubble the columns don't align, and each cell
@@ -135,7 +159,11 @@ def to_chat_html(text: str) -> str:
         ):
             j = i + 2
             items = []
-            while j < len(lines) and _TABLE_ROW.fullmatch(lines[j]) and not _TABLE_SEP.fullmatch(lines[j]):
+            while (
+                j < len(lines)
+                and _TABLE_ROW.fullmatch(lines[j])
+                and not _TABLE_SEP.fullmatch(lines[j])
+            ):
                 cells = _split_table_cells(lines[j])
                 items.append("<li>" + " — ".join(_inline(c) for c in cells) + "</li>")
                 j += 1
