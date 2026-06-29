@@ -276,7 +276,17 @@ def cmd_whoami(args: argparse.Namespace) -> None:
 def cmd_rooms(args: argparse.Namespace) -> None:
     client = _authed_client(args)
     try:
-        rooms = client.get_rooms()
+        page_size = int(getattr(args, "page_size", 50) or 50)
+        rooms = []
+        page = 0
+        while True:
+            batch = client.get_rooms(page=page, size=page_size)
+            if not batch:
+                break
+            rooms.extend(batch)
+            if len(batch) < page_size:
+                break
+            page += 1
         # Room name last and untruncated: names mix Korean/ASCII and are the
         # only thing a human IDs a room by, so never clip them. Every column
         # before it is fixed-width, so the ragged name tail aligns regardless.
@@ -359,11 +369,16 @@ def build_parser() -> argparse.ArgumentParser:
 
     add("login", "authenticate and save the profile")
     add("whoami", "print the saved bot identity")
-    add("rooms", "list chat rooms with their room ids")
+    p_rooms = add("rooms", "list all chat rooms with their room ids")
+    p_rooms.add_argument("--page-size", type=int, default=50, help="API page size (default: 50)")
 
     p_room = sub.add_parser("room", help="room operations").add_subparsers(
         dest="room_command", required=True
     )
+    p_list = p_room.add_parser(
+        "list", help="list all chat rooms with their room ids", parents=[common]
+    )
+    p_list.add_argument("--page-size", type=int, default=50, help="API page size (default: 50)")
     p_create = p_room.add_parser("create", help="create a chat room", parents=[common])
     p_create.add_argument("--users", required=True, help="comma-separated user ids")
     p_create.add_argument("--name", default=None)
@@ -387,7 +402,11 @@ def build_parser() -> argparse.ArgumentParser:
 
 def _dispatch(args: argparse.Namespace) -> None:
     if args.command == "room":
-        {"create": cmd_room_create, "open": cmd_room_open}[args.room_command](args)
+        {
+            "create": cmd_room_create,
+            "open": cmd_room_open,
+            "list": cmd_rooms,
+        }[args.room_command](args)
         return
     {
         "login": cmd_login,

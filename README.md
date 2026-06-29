@@ -160,7 +160,8 @@ daoubot whoami                         # 저장된 봇 신원 출력
 daoubot config                         # 저장된 프로필 보기(시크릿 마스킹)
 daoubot config set base_url <url>      # 연결 항목 수정 (password 는 값 생략 시 숨김 입력)
 daoubot config path                    # 프로필 파일 경로 출력
-daoubot rooms                          # 채팅방 목록 (room id 포함)
+daoubot rooms                          # 모든 채팅방 목록 (room id 포함, 페이지 끝까지 조회)
+daoubot room list                      # rooms 와 동일한 별칭
 daoubot room create --users a,b --name "Bot Test" [--type GROUP]
 daoubot room open <room_id>            # 방 상세 + 구성원
 daoubot send <room_id> "<text>"        # 메시지 전송
@@ -172,7 +173,7 @@ CLI는 온보딩·조회·단발 전송용입니다. **봇 실행은 CLI가 아�
 
 `--login-id`/`--password` 를 생략하면 (이 순서로) 프롬프트로 입력받습니다(비밀번호는 숨김 — argv·히스토리 노출 방지).
 
-개발자는 `login` → `rooms`/`room create` 로 필요한 `company_id`·`user_id`·`room_id` 를 손에 넣은 뒤, 그 값들로 SDK 봇을 작성하면 됩니다. (설치 없이: `uv run python -m daouoffice.cli rooms`)
+개발자는 `login` → `rooms`/`room list`/`room create` 로 필요한 `company_id`·`user_id`·`room_id` 를 손에 넣은 뒤, 그 값들로 SDK 봇을 작성하면 됩니다. `rooms`/`room list` 는 페이지를 끝까지 넘겨 전체 방을 보여줍니다. (설치 없이: `uv run python -m daouoffice.cli rooms`)
 
 ## 예제
 

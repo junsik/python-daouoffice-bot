@@ -2,6 +2,13 @@
 
 이 프로젝트의 모든 주요 변경 사항을 여기에 기록합니다. 이 형식은 [Keep a Changelog](https://keepachangelog.com/)를 따르며, 이 프로젝트는 [Semantic Versioning](https://semver.org/)을 준수합니다.
 
+## [Unreleased]
+
+### 변경됨
+
+- `daoubot rooms` 가 첫 페이지만 보여주지 않고 모든 페이지를 끝까지 조회한다. 같은 동작의 별칭으로
+  `daoubot room list` 를 추가했다.
+
 ## [0.2.0] — 2026-05-19
 
 ### 변경됨

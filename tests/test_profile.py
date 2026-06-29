@@ -167,6 +167,36 @@ def test_cli_rooms_reuses_saved_token(tmp_path, monkeypatch) -> None:
 
 
 @respx.mock
+def test_cli_rooms_lists_all_pages(tmp_path, monkeypatch, capsys) -> None:
+    monkeypatch.chdir(tmp_path)
+    save_profile(
+        Profile(base_url=BASE, company_id="11000", access_token="tok"),
+        base_dir=tmp_path,
+    )
+    respx.post("/api/portal/graphql").mock(
+        return_value=httpx.Response(200, json={"data": {"me": {"id": 1}}})
+    )
+    first_page = [
+        {"roomId": f"r{i}", "roomName": f"Room {i}", "roomType": "GROUP", "roomMemberCount": 2}
+        for i in range(50)
+    ]
+    second_page = [{"roomId": "r50", "roomName": "데이터팀AI-테스트방", "roomType": "GROUP"}]
+    rooms = respx.get("/api/chat/room").mock(
+        side_effect=[
+            httpx.Response(200, json={"data": {"elements": first_page}}),
+            httpx.Response(200, json={"data": {"elements": second_page}}),
+        ]
+    )
+
+    cli_main(["rooms"])
+
+    out = capsys.readouterr().out
+    assert rooms.call_count == 2
+    assert "데이터팀AI-테스트방" in out
+    assert "Total 51 rooms" in out
+
+
+@respx.mock
 def test_cli_whoami_prints_identity(tmp_path, monkeypatch, capsys) -> None:
     monkeypatch.chdir(tmp_path)
     save_profile(
@@ -301,6 +331,8 @@ def test_options_parse_after_subcommand() -> None:
     assert ns.password == "p!@#"
     ns2 = p.parse_args(["rooms", "--config", "bots/a.json"])
     assert ns2.command == "rooms" and ns2.config == "bots/a.json"
+    ns2b = p.parse_args(["room", "list", "--config", "bots/a.json"])
+    assert ns2b.command == "room" and ns2b.room_command == "list" and ns2b.config == "bots/a.json"
     ns3 = p.parse_args(["room", "create", "--users", "1,2", "--base-url", "https://x"])
     assert ns3.command == "room" and ns3.room_command == "create"
     assert ns3.base_url == "https://x"
