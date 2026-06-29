@@ -11,6 +11,10 @@ So this converts only the Markdown that maps onto that subset:
 * ``**bold**`` / ``__bold__``        → ``<b>…</b>``
 * ``*italic*`` / ``_italic_``        → ``<i>…</i>``
 * ``[text](url)``                    → ``<a href="url">text</a>``
+* ``# Heading`` / ``## …`` / …      → ``<b>Heading</b>`` (no heading tags
+  in DaouOffice; bold is the closest visual equivalent)
+* ``---`` / ``***`` / ``___``        → skipped (thematic break has no
+  equivalent; emitting a blank line would add unwanted whitespace)
 * ``1.`` / ``2)`` lines              → ``<ol><li>…</li>…</ol>``
 * ``-`` / ``*`` / ``+`` lines        → ``<ul><li>…</li>…</ul>``; leading
   indentation nests sub-items into an inner ``<ul>``/``<ol>`` so the chat
@@ -22,12 +26,11 @@ So this converts only the Markdown that maps onto that subset:
   field by position)
 * newline → ``<br>``; blank line → paragraph gap
 
-Anything else (headings, code, blockquotes) has no chat equivalent, so
-it degrades to its literal text rather than emitting a tag the client
-would show raw. All text is HTML-escaped first, so user content
-containing ``<``/``&`` can neither break the markup nor inject; the
-link href additionally escapes ``"`` so it cannot break out of the
-attribute.
+Anything else (code, blockquotes) has no chat equivalent, so it degrades
+to its literal text rather than emitting a tag the client would show raw.
+All text is HTML-escaped first, so user content containing ``<``/``&`` can
+neither break the markup nor inject; the link href additionally escapes
+``"`` so it cannot break out of the attribute.
 
 Opt in per bot with ``DaouBot(markdown=True)``; the engine then renders
 every handler reply through :func:`to_chat_html` before sending.
@@ -38,6 +41,10 @@ from __future__ import annotations
 import html
 import re
 
+# ATX heading: optional leading spaces, 1–6 ``#``, space, then the heading text.
+_HEADING = re.compile(r"#{1,6} +(.*)")
+# Thematic break: 3+ ``-``, ``*``, or ``_`` with optional spaces (GFM §4.1).
+_THEMATIC_BREAK = re.compile(r"[ \t]{0,3}([-*_])[ \t]*(?:\1[ \t]*){2,}$")
 # A list item: leading indent (spaces/tabs) decides nesting depth, then an
 # ordered (``1.`` / ``2)``) or unordered (``-`` / ``*`` / ``+``) marker.
 _LIST_ITEM = re.compile(r"([ \t]*)(\d+[.)]|[-*+])[ \t]+(.*)")
@@ -140,6 +147,15 @@ def to_chat_html(text: str) -> str:
     pieces: list[tuple[str, str]] = []
     i = 0
     while i < len(lines):
+        # ATX heading → bold (DaouOffice has no heading tags).
+        if m := _HEADING.fullmatch(lines[i]):
+            pieces.append(("text", f"<b>{_inline(m.group(1))}</b>"))
+            i += 1
+            continue
+        # Thematic break (---, ***, ___) → skip (no visual equivalent).
+        if _THEMATIC_BREAK.fullmatch(lines[i]):
+            i += 1
+            continue
         if _LIST_ITEM.fullmatch(lines[i]):
             rows: list[tuple[int, bool, str]] = []
             while i < len(lines) and (m := _LIST_ITEM.fullmatch(lines[i])):
