@@ -4,6 +4,8 @@
 
 ## [Unreleased]
 
+## [0.2.1] — 2026-08-06
+
 ### 추가됨
 
 - `BotClient.get_organization_members()` — 조직도 전체를 순회해 구성원 목록을 돌려준다. 부서마다
