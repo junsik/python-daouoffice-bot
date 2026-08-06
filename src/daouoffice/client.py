@@ -851,14 +851,51 @@ class BotClient:
             for member in _walk_member_nodes(tree)
         ]
 
+    def get_organization_members(self) -> list[OrganizationMember]:
+        """Return every member in the tenant's organization chart.
+
+        Walks the department tree from the root, visiting each department
+        once, and keeps one record per person so secondments listed under
+        several departments are not counted twice.
+
+        This costs one request per department, so cache the result if you
+        look people up often. For the much cheaper "who sits near this
+        person" query, use :meth:`get_user_peers` instead.
+        """
+        found: dict[str, OrganizationMember] = {}
+        visited: set[str] = set()
+
+        def walk(department_id: str) -> None:
+            for node in _walk_tree_nodes(self._fetch_department_tree(department_id)):
+                node_type = node.get("nodeType")
+                if node_type == "MEMBER":
+                    member = OrganizationMember.model_validate(node)
+                    if member.userId:
+                        found.setdefault(member.userId, member)
+                    continue
+                if node_type != "DEPARTMENT":
+                    continue
+                child = str(node.get("departmentId") or node.get("id") or "").strip()
+                if child and child not in visited:
+                    visited.add(child)
+                    walk(child)
+
+        walk("")
+        return sorted(
+            found.values(), key=lambda member: (member.departmentNamePath, member.name)
+        )
+
     def _fetch_user_tree(self, target_user_id: str) -> list[dict]:
+        return self._fetch_tree({"targetUserId": target_user_id})
+
+    def _fetch_department_tree(self, root_department_id: str) -> list[dict]:
+        return self._fetch_tree({"rootDepartmentId": root_department_id})
+
+    def _fetch_tree(self, selector: dict[str, str]) -> list[dict]:
         resp = self._api(
             "GET",
             "/api/portal/common/organization/tree",
-            params={
-                "targetUserId": target_user_id,
-                "shouldApplyOrganizationChartExpansion": "true",
-            },
+            params={**selector, "shouldApplyOrganizationChartExpansion": "true"},
         )
         resp.raise_for_status()
         data = resp.json().get("data", {})
@@ -871,20 +908,31 @@ class BotClient:
         return elements
 
 
-def _walk_member_nodes(nodes: list[dict]):
-    """Yield every ``nodeType == 'MEMBER'`` dict reachable from ``nodes``.
+# Nested node lists in the organization tree. ``unspecifiedMemberList`` holds
+# people who are not filed under a department; skipping it loses them.
+_NESTED_NODE_KEYS = ("childrenList", "unspecifiedMemberList")
 
-    The organization tree mixes COMPANY / DEPARTMENT / MEMBER nodes with
-    nested ``childrenList``; recursion is bounded by the tenant's department
-    depth and stays cheap in practice.
+
+def _walk_tree_nodes(nodes: list[dict]):
+    """Yield every node reachable from ``nodes``, parents before children.
+
+    The organization tree mixes COMPANY / DEPARTMENT / MEMBER nodes; recursion
+    is bounded by the tenant's department depth and stays cheap in practice.
     """
     if not nodes:
         return
     for node in nodes:
         if not isinstance(node, dict):
             continue
+        yield node
+        for key in _NESTED_NODE_KEYS:
+            nested = node.get(key)
+            if isinstance(nested, list) and nested:
+                yield from _walk_tree_nodes(nested)
+
+
+def _walk_member_nodes(nodes: list[dict]):
+    """Yield every ``nodeType == 'MEMBER'`` dict reachable from ``nodes``."""
+    for node in _walk_tree_nodes(nodes):
         if node.get("nodeType") == "MEMBER":
             yield node
-        children = node.get("childrenList")
-        if isinstance(children, list) and children:
-            yield from _walk_member_nodes(children)

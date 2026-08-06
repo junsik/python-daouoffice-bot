@@ -498,3 +498,124 @@ def test_organization_member_tolerates_null_strings() -> None:
     assert member.email == ""
     assert member.employeeNumber is None
     assert member.profileImagePath is None
+
+
+# --- get_organization_members -------------------------------------------
+
+_ROOT_TREE = {
+    "data": {
+        "elements": [
+            {
+                "nodeType": "COMPANY",
+                "childrenList": [
+                    {"nodeType": "DEPARTMENT", "departmentId": "D1", "name": "Data"},
+                    {"nodeType": "DEPARTMENT", "departmentId": "D2", "name": "Sales"},
+                ],
+                "unspecifiedMemberList": [
+                    {"nodeType": "MEMBER", "userId": "U0", "name": "Unfiled"}
+                ],
+            }
+        ]
+    }
+}
+_DEPARTMENT_TREES = {
+    "D1": {
+        "data": {
+            "elements": [
+                {
+                    "nodeType": "DEPARTMENT",
+                    "departmentId": "D1",
+                    "childrenList": [
+                        {"nodeType": "MEMBER", "userId": "U1", "name": "Ada"},
+                        {"nodeType": "DEPARTMENT", "departmentId": "D3"},
+                    ],
+                }
+            ]
+        }
+    },
+    "D2": {
+        "data": {
+            "elements": [
+                {
+                    "nodeType": "DEPARTMENT",
+                    "departmentId": "D2",
+                    # Ada is seconded here too; she must be counted once.
+                    "childrenList": [{"nodeType": "MEMBER", "userId": "U1", "name": "Ada"}],
+                }
+            ]
+        }
+    },
+    "D3": {
+        "data": {
+            "elements": [
+                {
+                    "nodeType": "DEPARTMENT",
+                    "departmentId": "D3",
+                    "childrenList": [{"nodeType": "MEMBER", "userId": "U2", "name": "Grace"}],
+                }
+            ]
+        }
+    },
+}
+
+
+def _organization_routes() -> list[str]:
+    """Serve the root tree and each department tree; record what was asked."""
+    asked: list[str] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        department = request.url.params.get("rootDepartmentId", "")
+        asked.append(department)
+        return httpx.Response(200, json=_DEPARTMENT_TREES.get(department, _ROOT_TREE))
+
+    respx.get("/api/portal/common/organization/tree").mock(side_effect=handler)
+    return asked
+
+
+@respx.mock
+def test_get_organization_members_walks_every_department() -> None:
+    _login_routes(respx.mock)
+    _organization_routes()
+    client = BotClient("acme-bot", "p", base_url=BASE, company_id="11000")
+    client.login()
+
+    members = client.get_organization_members()
+
+    assert {member.userId for member in members} == {"U0", "U1", "U2"}
+
+
+@respx.mock
+def test_get_organization_members_counts_a_seconded_person_once() -> None:
+    _login_routes(respx.mock)
+    _organization_routes()
+    client = BotClient("acme-bot", "p", base_url=BASE, company_id="11000")
+    client.login()
+
+    members = client.get_organization_members()
+
+    assert [member.userId for member in members].count("U1") == 1
+
+
+@respx.mock
+def test_get_organization_members_visits_each_department_once() -> None:
+    _login_routes(respx.mock)
+    asked = _organization_routes()
+    client = BotClient("acme-bot", "p", base_url=BASE, company_id="11000")
+    client.login()
+
+    client.get_organization_members()
+
+    assert asked.count("D1") == 1
+    assert asked.count("D2") == 1
+
+
+@respx.mock
+def test_get_organization_members_includes_people_without_a_department() -> None:
+    _login_routes(respx.mock)
+    _organization_routes()
+    client = BotClient("acme-bot", "p", base_url=BASE, company_id="11000")
+    client.login()
+
+    members = client.get_organization_members()
+
+    assert "U0" in {member.userId for member in members}

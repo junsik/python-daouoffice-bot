@@ -4,7 +4,16 @@
 
 ## [Unreleased]
 
+### 추가됨
+
+- `BotClient.get_organization_members()` — 조직도 전체를 순회해 구성원 목록을 돌려준다. 부서마다
+  한 번씩 조회하며 이미 방문한 부서는 건너뛰고, 여러 부서에 걸친 사람은 한 번만 센다. 부서 수만큼
+  요청이 나가므로 자주 쓰면 결과를 캐시한다.
+
 ### 변경됨
+
+- 조직도 노드 순회가 `unspecifiedMemberList` 까지 따라간다. 부서에 편성되지 않은 사람이
+  `get_user_peers()` 결과에서 빠지지 않는다.
 
 - `daoubot rooms` 가 첫 페이지만 보여주지 않고 모든 페이지를 끝까지 조회한다. 같은 동작의 별칭으로
   `daoubot room list` 를 추가했다.
