@@ -79,7 +79,9 @@ daoubot login --base-url https://yourcompany.daouoffice.com
 
 ### 무인(백그라운드) 운영
 
-AccessToken 은 약 30분 뒤 만료됩니다. `daoubot login` 한 번이면 30일짜리 RefreshToken 과 비밀번호가 프로필에 함께 저장돼, 봇/CLI 는 401 을 받으면 **(1) RefreshToken 으로 새 AccessToken 만 빠르게 발급**받고, 그게 실패할 때만 **(2) 비밀번호로 풀 재로그인**합니다 — 새 토큰은 프로필에 다시 씁니다. 추가 설정 없이 무인 운영됩니다. (`DAOU_PASSWORD` 환경 변수로 오버라이드 가능, 예: systemd `EnvironmentFile`.) RefreshToken 도 비밀번호도 전혀 없을 때만 만료 시 명확한 에러로 멈춥니다(사용자에게 재로그인을 강요하지 않음).
+토큰이 만료되면 RefreshToken으로 갱신을 시도하고, 갱신이 거절되면 다시 로그인합니다. 다우오피스가 모바일 OTP를 요구하면 대화형 CLI는 사용자에게 OTP를 숨김 입력으로 받습니다. 비대화형 실행에서 OTP가 필요하면 인증 오류로 멈추므로 사용자가 다시 로그인해야 합니다. 라이브러리 사용자는 `BotClient(..., otp_provider=callback)`으로 OTP 입력을 제공할 수 있습니다. OTP는 저장하거나 로그에 남기지 않습니다.
+
+`daoubot` 프로필에는 세션 토큰과 비밀번호가 저장됩니다. Unix에서는 파일 권한을 제한하며 Windows에서는 `chmod`만으로 사용자별 접근 제어를 보장하지 않습니다. 개인 계정의 토큰을 저장할 때는 OS 보호 저장소를 사용하는 호출자를 선택하세요.
 
 모든 연결값(비밀번호 포함)은 **명시 인자 > `DAOU_*` 환경 변수 > 앱 설정(`DAOU_APP_CONFIG`) > 프로필** 순으로 해석됩니다. SDK는 `.env` 파일을 자동으로 읽지 않으니, 환경 변수로 오버라이드하려면 셸에 직접 export 하거나 systemd EnvironmentFile 을 쓰세요. 다운스트림 앱(예: dt-agent)이 자기 `agent.yaml` 의 `daouoffice:` 섹션에 연결값을 선언하면 SDK 가 그걸 **읽기 전용**으로 사용합니다 — 토큰·identity 는 여전히 프로필이 관리(파일 분리).
 

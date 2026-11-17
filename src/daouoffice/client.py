@@ -180,9 +180,18 @@ class OrganizationMember(BaseModel):
     def _none_passthrough(cls, v: object) -> object:
         return v
 
-    @field_validator("loginId", "name", "email", "userStatus", "positionName",
-                     "dutyName", "departmentId", "departmentName",
-                     "departmentNamePath", mode="before")
+    @field_validator(
+        "loginId",
+        "name",
+        "email",
+        "userStatus",
+        "positionName",
+        "dutyName",
+        "departmentId",
+        "departmentName",
+        "departmentNamePath",
+        mode="before",
+    )
     @classmethod
     def _none_to_empty(cls, v: object) -> object:
         return "" if v is None else v
@@ -304,6 +313,7 @@ class BotClient:
         access_token: str = "",
         refresh_token: str = "",
         on_auth: Callable[[BotClient], None] | None = None,
+        otp_provider: Callable[[], str] | None = None,
         user_agent: str = DEFAULT_USER_AGENT,
         timeout: float = 30.0,
     ) -> None:
@@ -334,6 +344,7 @@ class BotClient:
         # Called after every successful login() (initial or 401-triggered),
         # so the owner can persist the refreshed token + identity.
         self._on_auth = on_auth
+        self._otp_provider = otp_provider
 
     @classmethod
     def from_token(
@@ -396,7 +407,7 @@ class BotClient:
         )
 
         body = resp.json() if resp.content else {}
-        logger.debug("Login response: status=%d body=%s", resp.status_code, body)
+        logger.debug("Login response: status=%d", resp.status_code)
 
         code = body.get("code", "")
         if not code and body.get("data") in ("OK", True):
@@ -423,11 +434,28 @@ class BotClient:
                 },
             )
             body = resp.json() if resp.content else {}
-            logger.debug("Login retry response: status=%d body=%s", resp.status_code, body)
+            logger.debug("Login retry response: status=%d", resp.status_code)
 
             code = body.get("code", "")
             if not code and body.get("data") in ("OK", True):
                 code = "SUCCESS-0000"
+
+        if resp.status_code == HTTP_OK and code == "PORTAL-0902":
+            if self._otp_provider is None:
+                raise DaouAuthError(
+                    "Mobile OTP is required; authenticate interactively", code=code
+                )
+            otp = self._otp_provider().strip()
+            if not otp:
+                raise DaouAuthError("Mobile OTP is required", code=code)
+            otp_resp = self._client.post(
+                "/api/portal/common/extra-auth/MOBILE",
+                json={"authCode": otp, "channel": "LOGIN"},
+            )
+            otp_body = otp_resp.json() if otp_resp.content else {}
+            if otp_resp.status_code != HTTP_OK or otp_body.get("data") != "OK":
+                raise DaouAuthError("Mobile OTP verification failed", code=code)
+            code = "SUCCESS-0000"
 
         if resp.status_code != HTTP_OK or code != "SUCCESS-0000":
             raise DaouAuthError(f"Login failed: {code or resp.text[:200]}", code=code or "")
@@ -440,7 +468,7 @@ class BotClient:
         # cannot use the cheap refresh endpoint.
         self.refresh_token = self._client.cookies.get("RefreshToken", "")
 
-        self.identity = self.whoami()
+        self.identity = self.whoami(recover=False)
         logger.info(
             "Logged in as %s (user_id=%s, company=%s)",
             self.identity.login_id,
@@ -564,9 +592,11 @@ class BotClient:
         headers = {**headers, **self.get_auth_headers()}
         return self._client.request(method, path, headers=headers, **kwargs)
 
-    def whoami(self) -> BotIdentity:
+    def whoami(self, *, recover: bool = True) -> BotIdentity:
         """Resolve the logged-in account's own identity via GraphQL ``me``."""
-        resp = self._client.post(
+        request = self._api if recover else self._client.request
+        resp = request(
+            "POST",
             "/api/portal/graphql",
             json={
                 "operationName": "userSessionQuery",
@@ -580,6 +610,8 @@ class BotClient:
         )
         resp.raise_for_status()
         me = (resp.json().get("data") or {}).get("me") or {}
+        if not me.get("id") or not me.get("loginId"):
+            raise DaouAuthError("Unable to verify authenticated identity")
         company = me.get("company") or {}
         return BotIdentity(
             user_id=str(me.get("id", "")),
@@ -846,10 +878,7 @@ class BotClient:
         if not target:
             return []
         tree = self._fetch_user_tree(target)
-        return [
-            OrganizationMember.model_validate(member)
-            for member in _walk_member_nodes(tree)
-        ]
+        return [OrganizationMember.model_validate(member) for member in _walk_member_nodes(tree)]
 
     def get_organization_members(self) -> list[OrganizationMember]:
         """Return every member in the tenant's organization chart.
@@ -881,9 +910,7 @@ class BotClient:
                     walk(child)
 
         walk("")
-        return sorted(
-            found.values(), key=lambda member: (member.departmentNamePath, member.name)
-        )
+        return sorted(found.values(), key=lambda member: (member.departmentNamePath, member.name))
 
     def _fetch_user_tree(self, target_user_id: str) -> list[dict]:
         return self._fetch_tree({"targetUserId": target_user_id})

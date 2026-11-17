@@ -88,6 +88,128 @@ def test_login_failure_raises() -> None:
 
 
 @respx.mock
+def test_mobile_otp_uses_same_challenge_session() -> None:
+    login = respx.post("/api/portal/public/auth/login").mock(
+        return_value=httpx.Response(
+            200,
+            json={"code": "PORTAL-0902"},
+            headers={"set-cookie": "Challenge=test-challenge; Path=/"},
+        )
+    )
+    otp = respx.post("/api/portal/common/extra-auth/MOBILE").mock(
+        return_value=httpx.Response(
+            200,
+            json={"data": "OK"},
+            headers=[
+                ("set-cookie", "AccessToken=access-test; Path=/"),
+                ("set-cookie", "RefreshToken=refresh-test; Path=/"),
+            ],
+        )
+    )
+    respx.post("/api/portal/graphql").mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "data": {
+                    "me": {
+                        "id": 42,
+                        "name": "Bot",
+                        "loginId": "acme-bot",
+                        "company": {"id": 11000, "uuid": "test", "domain": "acme", "name": "Acme"},
+                    }
+                }
+            },
+        )
+    )
+    client = BotClient(
+        "acme-bot", "p", base_url=BASE, company_id="11000", otp_provider=lambda: "123456"
+    )
+    assert client.login().user_id == "42"
+    assert login.call_count == 1 and otp.call_count == 1
+    assert "Challenge=test-challenge" in otp.calls.last.request.headers["cookie"]
+    assert client.access_token == "access-test"
+    assert client.refresh_token == "refresh-test"
+
+
+@respx.mock
+def test_mobile_otp_required_without_provider() -> None:
+    respx.post("/api/portal/public/auth/login").mock(
+        return_value=httpx.Response(200, json={"code": "PORTAL-0902"})
+    )
+    client = BotClient("acme-bot", "p", base_url=BASE, company_id="11000")
+    with pytest.raises(DaouAuthError, match="OTP is required"):
+        client.login()
+
+
+@respx.mock
+def test_mobile_otp_rejection_does_not_authenticate() -> None:
+    respx.post("/api/portal/public/auth/login").mock(
+        return_value=httpx.Response(200, json={"code": "PORTAL-0902"})
+    )
+    respx.post("/api/portal/common/extra-auth/MOBILE").mock(
+        return_value=httpx.Response(200, json={"data": "FAIL"})
+    )
+    client = BotClient(
+        "acme-bot", "p", base_url=BASE, company_id="11000", otp_provider=lambda: "wrong"
+    )
+    with pytest.raises(DaouAuthError, match="OTP verification failed"):
+        client.login()
+    assert not client.access_token
+
+
+@respx.mock
+def test_whoami_refreshes_a_saved_expired_session() -> None:
+    graphql = respx.post("/api/portal/graphql").mock(
+        side_effect=[
+            httpx.Response(401),
+            httpx.Response(
+                200,
+                json={
+                    "data": {
+                        "me": {
+                            "id": 42,
+                            "name": "Bot",
+                            "loginId": "acme-bot",
+                            "company": {
+                                "id": 11000,
+                                "uuid": "test",
+                                "domain": "acme",
+                                "name": "Acme",
+                            },
+                        }
+                    }
+                },
+            ),
+        ]
+    )
+    refresh = respx.post("/api/portal/public/auth/refresh/login").mock(
+        return_value=httpx.Response(
+            200, json={"data": "OK"}, headers={"set-cookie": "AccessToken=new-token; Path=/"}
+        )
+    )
+    client = BotClient(
+        "acme-bot",
+        "p",
+        base_url=BASE,
+        company_id="11000",
+        access_token="expired-token",
+        refresh_token="refresh-test",
+    )
+    assert client.whoami().user_id == "42"
+    assert refresh.call_count == 1
+    assert graphql.call_count == 2
+    assert client.access_token == "new-token"
+
+
+@respx.mock
+def test_whoami_rejects_missing_identity() -> None:
+    respx.post("/api/portal/graphql").mock(return_value=httpx.Response(200, json={"data": {}}))
+    client = BotClient("acme-bot", "p", base_url=BASE, company_id="11000", access_token="token")
+    with pytest.raises(DaouAuthError, match="Unable to verify"):
+        client.whoami()
+
+
+@respx.mock
 def test_discover_company_companylist() -> None:
     # Real shape: data.companyList[0].{companyId,uuid,...}
     route = respx.get("/api/portal/public/auth/company").mock(

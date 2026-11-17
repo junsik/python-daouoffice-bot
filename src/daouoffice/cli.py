@@ -145,6 +145,13 @@ def _authed_client(args: argparse.Namespace) -> BotClient:
         )
         try:
             client.identity = client.whoami()
+            if (
+                client.access_token != prof.access_token
+                or client.refresh_token != prof.refresh_token
+            ):
+                prof.access_token = client.access_token
+                prof.refresh_token = client.refresh_token
+                save_profile(prof, path=cfg)
             return client
         except (httpx.HTTPError, DaouAuthError):
             print("saved session expired — re-authenticating...", file=sys.stderr)
@@ -164,7 +171,14 @@ def _authed_client(args: argparse.Namespace) -> BotClient:
             "(set DAOU_PASSWORD or run interactively)"
         )
     client = BotClient(
-        login_id, password, base_url=base_url, company_id=company_id, on_auth=_persist
+        login_id,
+        password,
+        base_url=base_url,
+        company_id=company_id,
+        on_auth=_persist,
+        otp_provider=(lambda: getpass.getpass("Daou Messenger OTP: "))
+        if sys.stdin.isatty()
+        else None,
     )
     client.login()
     return client
@@ -220,7 +234,15 @@ def cmd_login(args: argparse.Namespace) -> None:
         except Exception as e:
             _die(f"could not auto-discover company_id ({e}); pass --company-id")
 
-    client = BotClient(login_id, password, base_url=base_url, company_id=company_id)
+    client = BotClient(
+        login_id,
+        password,
+        base_url=base_url,
+        company_id=company_id,
+        otp_provider=(lambda: getpass.getpass("Daou Messenger OTP: "))
+        if sys.stdin.isatty()
+        else None,
+    )
     client.login()
     cfg = _cfg(args)
     _store(client, base_url, cfg)

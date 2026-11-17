@@ -157,7 +157,7 @@ def test_cli_rooms_reuses_saved_token(tmp_path, monkeypatch) -> None:
         base_dir=tmp_path,
     )
     respx.post("/api/portal/graphql").mock(
-        return_value=httpx.Response(200, json={"data": {"me": {"id": 1}}})
+        return_value=httpx.Response(200, json={"data": {"me": {"id": 1, "loginId": "test-bot"}}})
     )
     rooms = respx.get("/api/chat/room").mock(
         return_value=httpx.Response(200, json={"data": {"elements": []}})
@@ -174,7 +174,7 @@ def test_cli_rooms_lists_all_pages(tmp_path, monkeypatch, capsys) -> None:
         base_dir=tmp_path,
     )
     respx.post("/api/portal/graphql").mock(
-        return_value=httpx.Response(200, json={"data": {"me": {"id": 1}}})
+        return_value=httpx.Response(200, json={"data": {"me": {"id": 1, "loginId": "test-bot"}}})
     )
     first_page = [
         {"roomId": f"r{i}", "roomName": f"Room {i}", "roomType": "GROUP", "roomMemberCount": 2}

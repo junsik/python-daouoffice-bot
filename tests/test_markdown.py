@@ -63,10 +63,8 @@ def test_underscore_or_star_in_url_not_mangled() -> None:
     assert to_chat_html("[r](https://e.com/a_b/c*d)") == '<a href="https://e.com/a_b/c*d">r</a>'
 
 
-def test_unsupported_markdown_degrades_to_literal_text() -> None:
-    # Still no chat equivalent for headings → keep the literal characters
-    # rather than emit a tag the client would show raw.
-    assert to_chat_html("# Title") == "# Title"
+def test_markdown_heading_renders_bold() -> None:
+    assert to_chat_html("# Title") == "<b>Title</b>"
 
 
 def test_leading_and_trailing_blank_lines_trimmed() -> None:
