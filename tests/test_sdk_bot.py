@@ -134,3 +134,29 @@ async def test_start_authenticates_then_polls() -> None:
     await bot.start()
 
     assert calls == ["authenticate", "poll"]
+
+
+class _LogoutClient(_StubClient):
+    def __init__(self) -> None:
+        self.logout_count = 0
+
+    def logout(self) -> None:
+        self.logout_count += 1
+
+
+async def test_stop_logs_out_by_default() -> None:
+    client = _LogoutClient()
+    bot = DaouBot(client=client, cursor_store=MemoryCursorStore())
+
+    await bot.stop()
+
+    assert client.logout_count == 1
+
+
+async def test_stop_can_keep_the_session() -> None:
+    client = _LogoutClient()
+    bot = DaouBot(client=client, cursor_store=MemoryCursorStore())
+
+    await bot.stop(logout=False)
+
+    assert client.logout_count == 0

@@ -81,6 +81,16 @@ daoubot login --base-url https://yourcompany.daouoffice.com
 
 AccessToken 은 약 30분 뒤 만료됩니다. `daoubot login` 한 번이면 30일짜리 RefreshToken 과 비밀번호가 프로필에 함께 저장돼, 봇/CLI 는 401 을 받으면 **(1) RefreshToken 으로 새 AccessToken 만 빠르게 발급**받고, 그게 실패할 때만 **(2) 비밀번호로 풀 재로그인**합니다 — 새 토큰은 프로필에 다시 씁니다. 추가 설정 없이 무인 운영됩니다. (`DAOU_PASSWORD` 환경 변수로 오버라이드 가능, 예: systemd `EnvironmentFile`.) RefreshToken 도 비밀번호도 전혀 없을 때만 만료 시 명확한 에러로 멈춥니다(사용자에게 재로그인을 강요하지 않음).
 
+#### 모바일 OTP(2차 인증) 계정
+
+2차 인증이 켜진 계정은 비밀번호만으로 로그인할 수 없습니다. 로그인 응답이 `PORTAL-0902` 이면 `BotClient.login()` 이 `DaouOtpRequired` 를 던지고, 같은 클라이언트에서 모바일 다우메신저의 OTP 로 `verify_otp(code)` 를 호출하면 세션이 완성됩니다. `daoubot login` 은 이때 OTP 를 입력받습니다(대화형 터미널에서만).
+
+이런 계정의 봇은 세션으로 운영합니다. 사람이 OTP 로 한 번 만든 세션을 RefreshToken 갱신으로 이어 쓰고, 비밀번호 재로그인은 OTP 단계에서 멈추므로 기대하지 않습니다.
+
+- 저장된 세션으로 기동하면 `whoami()` 가 만료된 AccessToken 을 RefreshToken 으로 먼저 갱신합니다.
+- 재시작해도 세션을 유지하려면 `await bot.stop(logout=False)` 로 종료합니다. 기본 `stop()` 은 서버 세션을 로그아웃합니다.
+- 실행 중인 클라이언트에 다른 곳에서 새로 만든 세션을 넣을 때는 `client.adopt_session(other)` 를 씁니다. 이전 세션의 쿠키를 버리고 `on_auth` 로 프로필에 저장합니다.
+
 모든 연결값(비밀번호 포함)은 **명시 인자 > `DAOU_*` 환경 변수 > 앱 설정(`DAOU_APP_CONFIG`) > 프로필** 순으로 해석됩니다. SDK는 `.env` 파일을 자동으로 읽지 않으니, 환경 변수로 오버라이드하려면 셸에 직접 export 하거나 systemd EnvironmentFile 을 쓰세요. 다운스트림 앱(예: dt-agent)이 자기 `agent.yaml` 의 `daouoffice:` 섹션에 연결값을 선언하면 SDK 가 그걸 **읽기 전용**으로 사용합니다 — 토큰·identity 는 여전히 프로필이 관리(파일 분리).
 
 | 환경 변수 | 설명 |
