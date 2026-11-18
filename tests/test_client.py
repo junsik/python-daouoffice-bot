@@ -348,6 +348,42 @@ def test_adopt_session_replaces_tokens_and_drops_stale_refresh_cookie() -> None:
     assert running.access_token == "acc-3"
 
 
+@respx.mock
+def test_refresh_in_flight_during_adopt_does_not_overwrite_the_adopted_session() -> None:
+    _login_routes_with_refresh(respx.mock)
+    running = BotClient("acme-bot", "p", base_url=BASE, company_id="11000")
+    running.login()
+    persisted: list[str] = []
+    running._on_auth = lambda c: persisted.append(c.access_token)
+    source = BotClient.from_token(BASE, "acc-new", refresh_token="rfr-new")
+    source.identity = running.identity
+
+    def _refresh(request: httpx.Request) -> httpx.Response:
+        running.adopt_session(source)  # an OTP renewal completes while this refresh is in flight
+        return httpx.Response(
+            200,
+            json={"data": "OK"},
+            headers=[
+                ("set-cookie", "AccessToken=acc-old-refreshed; Path=/"),
+                ("set-cookie", "RefreshToken=rfr-1; Path=/"),
+            ],
+        )
+
+    respx.post("/api/portal/public/auth/refresh/login").mock(side_effect=_refresh)
+    rooms = respx.get("/api/chat/room").mock(
+        side_effect=[
+            httpx.Response(401, json={"code": "ROUTE-0004"}),
+            httpx.Response(200, json={"data": {"elements": []}}),
+        ]
+    )
+
+    running.get_rooms()
+
+    assert (running.access_token, running.refresh_token) == ("acc-new", "rfr-new")
+    assert persisted == ["acc-new"]  # only the adopt, never the stale refresh
+    assert "AccessToken=acc-new" in rooms.calls.last.request.headers["cookie"]
+
+
 def test_adopt_session_rejects_unauthenticated_source() -> None:
     running = BotClient.from_token(BASE, "acc-1")
     with pytest.raises(DaouAuthError):

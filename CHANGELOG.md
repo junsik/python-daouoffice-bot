@@ -7,7 +7,7 @@
 ### 추가됨
 
 - 모바일 OTP(2차 인증) 로그인. 로그인 응답이 `PORTAL-0902` 이면 `BotClient.login()` 이 `DaouOtpRequired` 를 던지고, 같은 클라이언트의 `verify_otp(code)` 가 OTP 를 제출해 세션을 완성한다. `daoubot login` 은 대화형 터미널에서 OTP 를 입력받는다.
-- `BotClient.adopt_session(other)` — 다른 클라이언트가 인증한 세션으로 바꾼다. 이전 세션의 쿠키를 버려 갱신이 낡은 RefreshToken 으로 돌아가지 않는다.
+- `BotClient.adopt_session(other)` — 다른 클라이언트가 인증한 세션으로 바꾼다. 이전 세션의 쿠키를 버려 갱신이 낡은 RefreshToken 으로 돌아가지 않는다. 바꾸는 동안 진행 중이던 갱신의 결과는 버려 새 세션을 덮어쓰지 않는다.
 - `DaouBot.stop(logout=False)` — 서버 세션을 유지한 채 폴링만 멈춘다.
 
 ### 변경됨

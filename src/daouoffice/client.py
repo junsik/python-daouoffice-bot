@@ -353,6 +353,8 @@ class BotClient:
         # AccessToken without re-presenting the password.
         self.refresh_token: str = refresh_token
         self.identity: BotIdentity | None = None
+        # Bumped by adopt_session(); a refresh started before the bump is discarded.
+        self._session_epoch = 0
         # Called after every successful login() (initial or 401-triggered),
         # so the owner can persist the refreshed token + identity.
         self._on_auth = on_auth
@@ -498,6 +500,7 @@ class BotClient:
         """
         if not source.access_token or source.identity is None:
             raise DaouAuthError("Source client is not authenticated")
+        self._session_epoch += 1
         self._client.cookies.clear()
         self.access_token = source.access_token
         self.refresh_token = source.refresh_token
@@ -572,6 +575,7 @@ class BotClient:
         falls back to full re-login.
         """
         url = f"{self._base_url}{failed_path}"
+        epoch = self._session_epoch
         resp = self._client.post(
             "/api/portal/public/auth/refresh/login",
             content=url.encode("utf-8"),
@@ -598,6 +602,13 @@ class BotClient:
                     code="PORTAL-0901",
                 )
             raise DaouAuthError(f"Refresh rejected: {body}", code=refresh_code)
+        if epoch != self._session_epoch:
+            # adopt_session() replaced the session while this refresh was in flight: the
+            # result belongs to the old session. Drop it (and the cookies it set) so it
+            # cannot overwrite or later resurrect the old tokens; the caller's retry uses
+            # the adopted session.
+            self._client.cookies.clear()
+            return
         new_access = self._client.cookies.get("AccessToken", "")
         if not new_access:
             raise DaouAuthError("Refresh response did not set a new AccessToken")
