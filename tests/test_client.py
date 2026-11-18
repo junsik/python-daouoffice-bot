@@ -197,6 +197,20 @@ def test_refresh_failure_falls_back_to_full_relogin() -> None:
 
 
 @respx.mock
+def test_refresh_server_error_is_not_a_rejected_session() -> None:
+    _login_routes_with_refresh(respx.mock)
+    respx.post("/api/portal/public/auth/refresh/login").mock(
+        return_value=httpx.Response(503, text="<html>maintenance</html>")
+    )
+    respx.get("/api/chat/room").mock(return_value=httpx.Response(401, json={"code": "ROUTE-0004"}))
+    client = BotClient.from_token(BASE, "acc-1", refresh_token="rfr-1")
+
+    with pytest.raises(httpx.HTTPStatusError):
+        client.get_rooms()
+    assert client.refresh_token == "rfr-1"
+
+
+@respx.mock
 def test_auto_relogin_on_401() -> None:
     _login_routes(respx.mock)
     # First rooms call 401s, then succeeds after re-login.

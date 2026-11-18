@@ -41,6 +41,7 @@ DEFAULT_USER_AGENT = (
 
 HTTP_OK = 200
 HTTP_UNAUTHORIZED = 401
+HTTP_SERVER_ERROR = 500
 
 
 class DaouConfigError(ValueError):
@@ -576,6 +577,11 @@ class BotClient:
             content=url.encode("utf-8"),
             headers={"Content-Type": "application/json", **self.get_auth_headers()},
         )
+        # A server-side failure says nothing about the RefreshToken: surface it
+        # as an HTTP error so callers retry instead of treating the session as
+        # rejected (which, for OTP accounts, needs a human to log in again).
+        if resp.status_code >= HTTP_SERVER_ERROR:
+            resp.raise_for_status()
         body = resp.json() if resp.content else {}
         if resp.status_code != HTTP_OK:
             raise DaouAuthError(

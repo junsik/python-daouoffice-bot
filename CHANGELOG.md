@@ -13,6 +13,7 @@
 ### 변경됨
 
 - `BotClient.whoami()` 가 401 을 받으면 RefreshToken 갱신 경로를 거친다. 저장된 세션으로 기동한 클라이언트가 AccessToken 만료 뒤에도 신원을 확인한다. 로그인 내부 호출은 `recover=False` 로 갱신하지 않는다.
+- RefreshToken 갱신이 서버 오류(5xx)로 실패하면 `DaouAuthError` 가 아니라 `httpx.HTTPStatusError` 를 낸다. 세션 거절과 일시 장애를 구분해, 호출자가 재시도할 수 있다.
 
 ## [0.3.0] — 2026-08-06
 
