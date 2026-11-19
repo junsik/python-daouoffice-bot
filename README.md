@@ -17,7 +17,7 @@
 | | 텔레그램/슬랙/디스코드 | 다우오피스 (이 SDK) |
 |---|---|---|
 | 봇 등록 | BotFather / 앱 등록 + OAuth / 개발자 포털 | **없음.** 관리자가 **일반 사용자 계정**을 발급 |
-| 인증 | 봇 토큰 / OAuth 스코프 | 계정 `loginId`/`password` 로그인 (세션 ~30분, 자동 재로그인) |
+| 인증 | 봇 토큰 / OAuth 스코프 | 계정 `loginId`/`password` 로그인 (AccessToken ~30분, RefreshToken 자동 갱신, 모바일 OTP 계정 지원) |
 | 방에 "연결" | 봇 초대 + 권한/스코프, 채널별 설치 | 그 계정을 방 멤버로 **추가하면 끝** — 멤버십이 곧 연결 |
 | 메시지 수신 | 웹훅 / Events / Gateway 푸시 | **푸시 없음** — PC 클라이언트와 같은 REST를 폴링 |
 | 권한 모델 | 스코프된 봇 토큰 | 그 계정이 가진 권한 그대로 (그래서 *전용* 계정 필수) |
@@ -31,7 +31,7 @@
 
 즉 "토큰 발급"도 "앱 등록"도 "웹훅 설정"도 없습니다.
 
-이 모델에서 흘러나오는, 일반 봇 SDK엔 없는 운영 제약을 SDK가 흡수합니다: 계정 단위 읽음 상태(전용 계정 필수), 폴링 기반 at-least-once + 재시작 커서, 그룹 도배 방지 allowlist, 인라인 멘션 토큰 파싱, 30분 토큰 자동 재로그인. 설계 근거는 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) 참고.
+이 모델에서 흘러나오는, 일반 봇 SDK엔 없는 운영 제약을 SDK가 흡수합니다: 계정 단위 읽음 상태(전용 계정 필수), 폴링 기반 at-least-once + 재시작 커서, 그룹 도배 방지 allowlist, 인라인 멘션 토큰 파싱, 30분 토큰 자동 갱신(필요하면 재로그인), 모바일 OTP 계정의 세션 운영. 설계 근거는 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) 참고.
 
 준비물:
 
@@ -247,7 +247,7 @@ npx skills add junsik/python-daouoffice-bot --skill daouoffice-bot
 |---|---|
 | `BotClient` | REST API 래퍼 (로그인·방·메시지·첨부·`whoami`·`discover_company`) |
 | `BotEngine` | 폴링 엔진 (단일 구현, async) |
-| `DaouBot` | 고수준 봇 (`on_message` + 폴링 + 401 자동 재로그인) |
+| `DaouBot` | 고수준 봇 (`on_message` + 폴링 + 401 시 세션 자동 갱신) |
 | `RoomRouter` | 방별 핸들러 분기 (등록한 방만 처리, 나머지 무시) |
 | `only_when_mentioned` | 봇 멘션(`@봇`/`@전체`) 시에만 핸들러 실행 |
 | `only_when_addressed` | 위 + 별명도 인식 (`@별명` 평문, `aliases=(...)`). 별명은 평문이라 권한 게이트로는 부적합 |

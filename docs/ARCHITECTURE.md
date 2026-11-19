@@ -27,7 +27,7 @@ Telegram/Slack/Discord 는 봇 *플랫폼* 을 준다: 등록 체계(BotFather /
 | 방별 설치 없음 — **구성원 = 연결** | "연결" 단계 없음; 대신 `RoomRouter` allowlist 로 끌려 들어간 방 전부에 응답하지 않게 함 |
 | 범위 한정 봇 토큰이 아니라 계정 권한 | **전용 계정** 필수; `mark_read` 가 계정 전역(§6) |
 | 푸시 없음 — 공유 REST를 **폴링** | 방별 커서·at-least-once·재시작 복구를 갖춘 폴링 엔진(§4–5) |
-| 세션 ~30분, 갱신 엔드포인트 없음 | 401 시 투명 재로그인(§3) |
+| AccessToken ~30분, RefreshToken으로 갱신, 계정에 따라 모바일 OTP | 401 시 RefreshToken 갱신 → 필요하면 재로그인; OTP 계정은 사람이 만든 세션을 이어 쓰는 세션 운영(§3) |
 | 회사별 SaaS, 미문서화 | 하드코딩 없는 멀티테넌트; 모든 사실에 "SAZ 기반/라이브 미검증" 정직 표기 |
 
 즉 이 SDK는 "DaouOffice용 Telegram 스타일 프레임워크"가 아니라 *그 절차와 귀결의 캡슐화* 다. 이 문서의 나머지는 각 귀결의 근거다.
@@ -53,12 +53,12 @@ flowchart TD
         BotEngine -->|디스패치| PF["on_message / RoomRouter"]
     end
 
-    BotClient -->|HTTP + 401 자동 재로그인| API[(DaouOffice REST)]
+    BotClient -->|HTTP + 401 시 세션 갱신| API[(DaouOffice REST)]
 ```
 
 | 구성 요소 | 책임 |
 |---|---|
-| `BotClient` | REST 래퍼: 로그인, GraphQL `me` 신원, 방·메시지·첨부·읽음 처리. 멀티테넌트. 401 자동 재로그인. 모든 요청에 `X-Referer-Info`(테넌트 호스트) 부착. |
+| `BotClient` | REST 래퍼: 로그인(모바일 OTP 2단계 포함), GraphQL `me` 신원, 방·메시지·첨부·읽음 처리. 멀티테넌트. 401 시 RefreshToken 갱신 후 필요하면 재로그인. 다른 곳에서 만든 세션 반영(`adopt_session`). 모든 요청에 `X-Referer-Info`(테넌트 호스트) 부착. |
 | `BotEngine` | 폴링 루프, 방별 순서 디스패치, 커서/ack, 전달 보장. |
 | `DaouBot` | 고수준 파사드: client+engine 결선, `on_message` 노출. |
 | `RoomRouter` | allowlist 기본 방별 핸들러 분기. |
@@ -69,7 +69,7 @@ flowchart TD
 
 ## 3. 인증 & 세션 수명주기
 
-AccessToken JWT 수명은 약 30분이고, 캡처 전체에 토큰 갱신 엔드포인트가 없다. DaouOffice 는 계정당 다중 동시 세션을 허용한다. 따라서 복구 전략은 **401(`ROUTE-0004`) 시 재로그인** 이며, 새 로그인은 또 다른 세션일 뿐이라 안전하다.
+로그인하면 AccessToken(약 30분)과 RefreshToken 쿠키를 받는다. AccessToken이 만료되면 API가 401(`ROUTE-0004`)을 돌려주고, 클라이언트는 `/api/portal/public/auth/refresh/login`으로 비밀번호 없이 새 AccessToken을 받은 뒤 원요청을 다시 보낸다. RefreshToken도 거절되면 비밀번호가 있을 때만 재로그인한다. DaouOffice 는 계정당 다중 동시 세션을 허용하므로 새 로그인은 또 다른 세션일 뿐이다.
 
 ```mermaid
 sequenceDiagram
@@ -77,19 +77,38 @@ sequenceDiagram
     participant C as BotClient
     participant S as DaouOffice
     C->>S: POST /auth/login (companyId, id, pw)
-    S-->>C: Set-Cookie AccessToken (~30m)
+    alt 모바일 OTP 계정
+        S-->>C: PORTAL-0902 (challenge 쿠키)
+        C-->>E: DaouOtpRequired
+        C->>S: POST /common/extra-auth/MOBILE (authCode)
+    end
+    S-->>C: Set-Cookie AccessToken (~30m) + RefreshToken
     C->>S: POST /graphql { me }
     S-->>C: 신원 (user_id, company)
     loop poll_interval 마다
         E->>C: get_rooms / history / send
-        C->>S: API 호출 (Cookie: AccessToken)
-        alt 401 ROUTE-0004 이고 자격증명 보유
-            C->>S: 재로그인
+        C->>S: API 호출 (Cookie: AccessToken, RefreshToken)
+        alt 401 ROUTE-0004
+            C->>S: POST /auth/refresh/login
             S-->>C: 새 AccessToken
             C->>S: 원요청 재시도
         end
     end
 ```
+
+갱신 실패는 두 가지로 나눈다.
+
+- 세션이 거절되면(4xx, `PORTAL-0905` 로그아웃 등) `DaouAuthError` 를 낸다. 비밀번호가 있으면 재로그인하고, 없으면 호출자에게 실패를 알린다.
+- 갱신 엔드포인트의 서버 오류(5xx)는 세션 문제가 아니므로 `httpx.HTTPStatusError` 로 올려 호출자가 재시도하게 한다.
+
+### 모바일 OTP 계정과 세션 운영
+
+2차 인증이 켜진 계정은 비밀번호 로그인이 `PORTAL-0902` 로 멈추고, 같은 클라이언트에서 `verify_otp(code)` 로 OTP를 제출해야 세션이 생긴다. 이런 계정의 봇은 무인 재로그인을 할 수 없으므로 **세션 운영** 을 한다.
+
+- 사람이 OTP로 한 번 만든 세션을 프로필에 저장하고, 데몬은 RefreshToken 갱신으로 이어 쓴다. 비밀번호는 저장하지 않는다.
+- 저장된 세션으로 기동하면 `whoami()` 가 만료된 AccessToken을 먼저 갱신한다.
+- 재시작해도 세션을 잃지 않도록 `DaouBot.stop(logout=False)` 로 종료한다.
+- 세션이 끊기면 운영 화면 같은 다른 곳에서 새로 로그인하고 `adopt_session()` 으로 실행 중인 클라이언트에 넣는다. 이때 이전 세션의 쿠키를 버리고, 그 사이 진행 중이던 갱신의 결과도 버려 새 세션을 덮어쓰지 않는다.
 
 `company_id` 는 인증 없이 `/api/portal/public/auth/company`(`data.companyList[0]`)에서 얻을 수 있다. 이 공개 엔드포인트는 인증 쿠키가 없으므로 `X-Referer-Info`(테넌트 호스트) 헤더로 테넌트를 식별한다 — 그래서 클라이언트가 모든 요청에 그 헤더를 붙인다. `daoubot login` 이 `--company-id` 생략 시 이를 사용해 자동 탐색한다.
 
@@ -132,7 +151,7 @@ flowchart TD
 
 | 파일 | 작성 주체 | 내용 | 비밀? |
 |---|---|---|---|
-| `profile.yaml` | `daoubot login` | 테넌트 + 신원 + 세션 토큰 + RefreshToken + 비밀번호 | 예 (토큰·비밀번호) |
+| `profile.yaml` | `daoubot login` | 테넌트 + 신원 + 세션 토큰 + RefreshToken + 비밀번호(세션 운영에서는 비움) | 예 (토큰·비밀번호) |
 | `cursors.json` | 엔진(`FileCursorStore`) | `room_id → 마지막 처리 id` | 아니오 |
 
 두 파일 모두 홈 디렉터리의 `~/.daoubot/` 에 놓인다 — 실행 cwd 와 무관(`~/.aws`/`~/.docker` 류 관례)하므로 어느 디렉터리·예제에서 실행하든 같은 로그인·커서를 재사용한다. 비밀번호는 무인 자동 재로그인을 위해 `profile.yaml` 에 저장된다 — 파일은 `chmod 600`·`.daoubot/` gitignore 이고, 화면에는 `Profile.public_dict()` 가 `****` 로 마스킹한다(`daoubot login` 출력 등). `--config`/`config_path` 로 프로필 경로를 분리해 한 호스트에서 여러 봇/테넌트를 운용한다. (이전 `profile.json` 형식이 같은 위치에 있으면 SDK 가 그것도 읽어들이며, 다음 save 부터 yaml 로 재작성한다.)
@@ -145,7 +164,8 @@ flowchart TD
 |---|---|
 | 멀티테넌트, 하드코딩 없음 | DaouOffice 는 회사별 SaaS; 라이브러리는 임의 테넌트를 섬겨야 한다. |
 | GraphQL `me` 로 신원 자동 해석 | 봇 user id 하드코딩 제거; 자기 메시지 스킵에 필요. |
-| RefreshToken 이 아니라 401 재로그인 | 캡처에 갱신 엔드포인트 없음; 다중 세션 허용이라 재로그인이 안전. |
+| 401 시 RefreshToken 갱신 먼저, 재로그인은 폴백 | 갱신은 비밀번호 없이 되고, OTP 계정은 재로그인이 불가능하다. 다중 세션 허용이라 폴백 재로그인도 안전. |
+| OTP 계정은 세션 운영 | 사람이 만든 세션을 이어 쓰고 비밀번호를 저장하지 않는다. 종료 시 로그아웃하지 않아 재시작에도 세션이 유지된다. |
 | 커서/ack 를 엔진이 소유 | 관례(Telegram/Kafka/Matrix); 서버측 큐가 없으니 핸들러로 떠넘기면 모든 작성자가 분산시스템 문제를 풀어야 한다. |
 | 전달은 at-least-once 단일 (노브 없음) | 메시지 전달 표준이며, 구성 가능한 at-most-once 는 조용한 손실 함정. 표준을 따르고 결정을 위임하지 않는다. |
 | RoomRouter = allowlist 기본 | 봇 계정은 아무 방에나 초대될 수 있음; 전부 응답은 footgun. |
