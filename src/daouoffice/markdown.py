@@ -41,7 +41,7 @@ from __future__ import annotations
 import html
 import re
 
-# ATX heading: optional leading spaces, 1–6 ``#``, space, then the heading text.
+# ATX heading: optional leading spaces, 1-6 ``#``, space, then the heading text.
 _HEADING = re.compile(r"#{1,6} +(.*)")
 # Thematic break: 3+ ``-``, ``*``, or ``_`` with optional spaces (GFM §4.1).
 _THEMATIC_BREAK = re.compile(r"[ \t]{0,3}([-*_])[ \t]*(?:\1[ \t]*){2,}$")

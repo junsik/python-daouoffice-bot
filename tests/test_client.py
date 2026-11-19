@@ -13,6 +13,7 @@ from daouoffice.client import (
     ChatHistoryItem,
     DaouAuthError,
     DaouConfigError,
+    DaouOtpRequired,
     OrganizationMember,
 )
 
@@ -196,6 +197,20 @@ def test_refresh_failure_falls_back_to_full_relogin() -> None:
 
 
 @respx.mock
+def test_refresh_server_error_is_not_a_rejected_session() -> None:
+    _login_routes_with_refresh(respx.mock)
+    respx.post("/api/portal/public/auth/refresh/login").mock(
+        return_value=httpx.Response(503, text="<html>maintenance</html>")
+    )
+    respx.get("/api/chat/room").mock(return_value=httpx.Response(401, json={"code": "ROUTE-0004"}))
+    client = BotClient.from_token(BASE, "acc-1", refresh_token="rfr-1")
+
+    with pytest.raises(httpx.HTTPStatusError):
+        client.get_rooms()
+    assert client.refresh_token == "rfr-1"
+
+
+@respx.mock
 def test_auto_relogin_on_401() -> None:
     _login_routes(respx.mock)
     # First rooms call 401s, then succeeds after re-login.
@@ -210,6 +225,169 @@ def test_auto_relogin_on_401() -> None:
     rooms = client.get_rooms()
     assert rooms[0].roomId == "r1"
     assert route.call_count > 1  # retried after re-auth
+
+
+def _otp_routes(mock: respx.MockRouter) -> tuple[respx.Route, respx.Route]:
+    """Mobile-OTP login: the login answers PORTAL-0902 (HTTP 401) with a
+    challenge cookie; extra-auth on the same jar completes the session."""
+    login = mock.post("/api/portal/public/auth/login").mock(
+        return_value=httpx.Response(
+            401,
+            json={"code": "PORTAL-0902"},
+            headers={"set-cookie": "challenge=pending; Path=/"},
+        )
+    )
+
+    def _extra_auth(request: httpx.Request) -> httpx.Response:
+        body = json.loads(request.content)
+        if (
+            "challenge=pending" not in request.headers.get("cookie", "")
+            or request.headers.get("X-Referer-Info") != "acme.daouoffice.com"
+            or body != {"authCode": "123456", "channel": "LOGIN"}
+        ):
+            return httpx.Response(401, json={"code": "PORTAL-0032"})
+        return httpx.Response(
+            200,
+            json={"data": "OK"},
+            headers=[
+                ("set-cookie", "AccessToken=acc-otp; Path=/"),
+                ("set-cookie", "RefreshToken=rfr-otp; Path=/"),
+            ],
+        )
+
+    extra = mock.post("/api/portal/common/extra-auth/MOBILE").mock(side_effect=_extra_auth)
+    mock.post("/api/portal/graphql").mock(
+        return_value=httpx.Response(200, json={"data": {"me": {"id": 42, "loginId": "acme-bot"}}})
+    )
+    return login, extra
+
+
+@respx.mock
+def test_login_raises_otp_required_then_verify_completes_session() -> None:
+    login, extra = _otp_routes(respx.mock)
+    persisted: list[str] = []
+    client = BotClient(
+        "acme-bot",
+        "p",
+        base_url=BASE,
+        company_id="11000",
+        on_auth=lambda c: persisted.append(c.access_token),
+    )
+    with pytest.raises(DaouOtpRequired) as exc:
+        client.login()
+    assert exc.value.code == "PORTAL-0902"
+    assert login.call_count == 1  # not mistaken for PORTAL-0901 and retried
+
+    identity = client.verify_otp(" 123456 ")
+    assert extra.called
+    assert identity.user_id == "42"
+    assert client.access_token == "acc-otp"
+    assert client.refresh_token == "rfr-otp"
+    assert persisted == ["acc-otp"]
+
+
+@respx.mock
+def test_verify_otp_rejection_carries_server_code() -> None:
+    _otp_routes(respx.mock)
+    client = BotClient("acme-bot", "p", base_url=BASE, company_id="11000")
+    with pytest.raises(DaouOtpRequired):
+        client.login()
+    with pytest.raises(DaouAuthError) as exc:
+        client.verify_otp("000000")
+    assert exc.value.code == "PORTAL-0032"
+    assert client.access_token == ""
+
+
+@respx.mock
+def test_whoami_refreshes_an_expired_saved_session() -> None:
+    respx.post("/api/portal/graphql").mock(
+        side_effect=[
+            httpx.Response(401, json={"code": "ROUTE-0004"}),
+            httpx.Response(200, json={"data": {"me": {"id": 42, "loginId": "acme-bot"}}}),
+        ]
+    )
+    respx.post("/api/portal/public/auth/refresh/login").mock(
+        return_value=httpx.Response(
+            200, json={"data": "OK"}, headers={"set-cookie": "AccessToken=acc-2; Path=/"}
+        )
+    )
+    client = BotClient.from_token(BASE, "acc-expired", refresh_token="rfr-1")
+    assert client.whoami().user_id == "42"
+    assert client.access_token == "acc-2"
+
+
+@respx.mock
+def test_adopt_session_replaces_tokens_and_drops_stale_refresh_cookie() -> None:
+    _login_routes_with_refresh(respx.mock)
+    running = BotClient("acme-bot", "p", base_url=BASE, company_id="11000")
+    running.login()  # jar now holds RefreshToken=rfr-1
+    source = BotClient.from_token(BASE, "acc-new", refresh_token="rfr-new")
+    source.identity = running.identity
+    persisted: list[tuple[str, str]] = []
+    running._on_auth = lambda c: persisted.append((c.access_token, c.refresh_token))
+
+    running.adopt_session(source)
+    assert (running.access_token, running.refresh_token) == ("acc-new", "rfr-new")
+    assert persisted == [("acc-new", "rfr-new")]
+
+    # A refresh that only re-sets AccessToken must keep the adopted
+    # RefreshToken, not resurrect the previous session's jar cookie.
+    respx.post("/api/portal/public/auth/refresh/login").mock(
+        return_value=httpx.Response(
+            200, json={"data": "OK"}, headers={"set-cookie": "AccessToken=acc-3; Path=/"}
+        )
+    )
+    respx.get("/api/chat/room").mock(
+        side_effect=[
+            httpx.Response(401, json={"code": "ROUTE-0004"}),
+            httpx.Response(200, json={"data": {"elements": []}}),
+        ]
+    )
+    running.get_rooms()
+    assert running.refresh_token == "rfr-new"
+    assert running.access_token == "acc-3"
+
+
+@respx.mock
+def test_refresh_in_flight_during_adopt_does_not_overwrite_the_adopted_session() -> None:
+    _login_routes_with_refresh(respx.mock)
+    running = BotClient("acme-bot", "p", base_url=BASE, company_id="11000")
+    running.login()
+    persisted: list[str] = []
+    running._on_auth = lambda c: persisted.append(c.access_token)
+    source = BotClient.from_token(BASE, "acc-new", refresh_token="rfr-new")
+    source.identity = running.identity
+
+    def _refresh(request: httpx.Request) -> httpx.Response:
+        running.adopt_session(source)  # an OTP renewal completes while this refresh is in flight
+        return httpx.Response(
+            200,
+            json={"data": "OK"},
+            headers=[
+                ("set-cookie", "AccessToken=acc-old-refreshed; Path=/"),
+                ("set-cookie", "RefreshToken=rfr-1; Path=/"),
+            ],
+        )
+
+    respx.post("/api/portal/public/auth/refresh/login").mock(side_effect=_refresh)
+    rooms = respx.get("/api/chat/room").mock(
+        side_effect=[
+            httpx.Response(401, json={"code": "ROUTE-0004"}),
+            httpx.Response(200, json={"data": {"elements": []}}),
+        ]
+    )
+
+    running.get_rooms()
+
+    assert (running.access_token, running.refresh_token) == ("acc-new", "rfr-new")
+    assert persisted == ["acc-new"]  # only the adopt, never the stale refresh
+    assert "AccessToken=acc-new" in rooms.calls.last.request.headers["cookie"]
+
+
+def test_adopt_session_rejects_unauthenticated_source() -> None:
+    running = BotClient.from_token(BASE, "acc-1")
+    with pytest.raises(DaouAuthError):
+        running.adopt_session(BotClient.from_token(BASE, ""))
 
 
 @respx.mock

@@ -36,7 +36,7 @@ import sys
 import httpx
 
 from daouoffice import BotClient
-from daouoffice.client import DaouAuthError, DaouConfigError
+from daouoffice.client import DaouAuthError, DaouConfigError, DaouOtpRequired
 from daouoffice.config import load_app_config
 from daouoffice.profile import Profile, load_profile, profile_path, save_profile
 
@@ -221,7 +221,15 @@ def cmd_login(args: argparse.Namespace) -> None:
             _die(f"could not auto-discover company_id ({e}); pass --company-id")
 
     client = BotClient(login_id, password, base_url=base_url, company_id=company_id)
-    client.login()
+    try:
+        client.login()
+    except DaouOtpRequired:
+        if not sys.stdin.isatty():
+            _die("this account requires the mobile messenger OTP; run login interactively")
+        otp = input("Mobile messenger OTP: ").strip()
+        if not otp:
+            _die("an OTP is required for this account")
+        client.verify_otp(otp)
     cfg = _cfg(args)
     _store(client, base_url, cfg)
     print(f"\nsaved → {profile_path(path=cfg)}\n")

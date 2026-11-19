@@ -41,6 +41,7 @@ DEFAULT_USER_AGENT = (
 
 HTTP_OK = 200
 HTTP_UNAUTHORIZED = 401
+HTTP_SERVER_ERROR = 500
 
 
 class DaouConfigError(ValueError):
@@ -59,6 +60,18 @@ class DaouAuthError(RuntimeError):
     def __init__(self, message: str, code: str = "") -> None:
         super().__init__(message)
         self.code = code
+
+
+#: Login response code when the account requires a mobile messenger OTP.
+OTP_REQUIRED_CODE = "PORTAL-0902"
+
+
+class DaouOtpRequired(DaouAuthError):
+    """Raised by :meth:`BotClient.login` when the account requires an OTP.
+
+    The client keeps the login challenge; finish it with
+    :meth:`BotClient.verify_otp` on the same instance.
+    """
 
 
 def _resolve(value: str | None, env: str) -> str | None:
@@ -180,9 +193,18 @@ class OrganizationMember(BaseModel):
     def _none_passthrough(cls, v: object) -> object:
         return v
 
-    @field_validator("loginId", "name", "email", "userStatus", "positionName",
-                     "dutyName", "departmentId", "departmentName",
-                     "departmentNamePath", mode="before")
+    @field_validator(
+        "loginId",
+        "name",
+        "email",
+        "userStatus",
+        "positionName",
+        "dutyName",
+        "departmentId",
+        "departmentName",
+        "departmentNamePath",
+        mode="before",
+    )
     @classmethod
     def _none_to_empty(cls, v: object) -> object:
         return "" if v is None else v
@@ -331,6 +353,8 @@ class BotClient:
         # AccessToken without re-presenting the password.
         self.refresh_token: str = refresh_token
         self.identity: BotIdentity | None = None
+        # Bumped by adopt_session(); a refresh started before the bump is discarded.
+        self._session_epoch = 0
         # Called after every successful login() (initial or 401-triggered),
         # so the owner can persist the refreshed token + identity.
         self._on_auth = on_auth
@@ -402,6 +426,15 @@ class BotClient:
         if not code and body.get("data") in ("OK", True):
             code = "SUCCESS-0000"
 
+        # PORTAL-0902: the account requires a mobile messenger OTP. The
+        # challenge cookie stays in this client's jar; finish with
+        # verify_otp() on the same instance.
+        if code == OTP_REQUIRED_CODE:
+            raise DaouOtpRequired(
+                "Login requires the mobile messenger OTP; call verify_otp(code)",
+                code=code,
+            )
+
         # PORTAL-0901: 3-month password change required.
         # Try to delay the change via the change-delay API and retry login.
         if resp.status_code != HTTP_OK or code == "PORTAL-0901":
@@ -432,6 +465,50 @@ class BotClient:
         if resp.status_code != HTTP_OK or code != "SUCCESS-0000":
             raise DaouAuthError(f"Login failed: {code or resp.text[:200]}", code=code or "")
 
+        return self._finish_login()
+
+    def verify_otp(self, otp: str) -> BotIdentity:
+        """Complete a login that raised :class:`DaouOtpRequired`.
+
+        Submits the mobile messenger OTP on the same client (the challenge
+        cookie from :meth:`login` must still be in this client's jar), then
+        stores the tokens and resolves the identity like :meth:`login`.
+
+        Raises:
+            DaouAuthError: If the OTP is rejected; ``code`` carries the
+                server code (``PORTAL-0032`` wrong code, ``PORTAL-0052``
+                expired challenge).
+        """
+        resp = self._client.post(
+            "/api/portal/common/extra-auth/MOBILE",
+            json={"authCode": otp.strip(), "channel": "LOGIN"},
+            headers={"X-Referer-Info": urlparse(self._base_url).netloc},
+        )
+        body = resp.json() if resp.content else {}
+        if resp.status_code != HTTP_OK or body.get("data") != "OK":
+            code = body.get("code", "") if isinstance(body, dict) else ""
+            raise DaouAuthError(f"OTP rejected: {code or resp.status_code}", code=code)
+        return self._finish_login()
+
+    def adopt_session(self, source: BotClient) -> None:
+        """Switch this client to the session another client authenticated.
+
+        Lets a long-running client take over a session obtained elsewhere
+        (e.g. an interactive OTP login) without rebuilding the client or its
+        owners. Stale token cookies are dropped so a later refresh cannot
+        fall back to the previous session's RefreshToken.
+        """
+        if not source.access_token or source.identity is None:
+            raise DaouAuthError("Source client is not authenticated")
+        self._session_epoch += 1
+        self._client.cookies.clear()
+        self.access_token = source.access_token
+        self.refresh_token = source.refresh_token
+        self.identity = source.identity
+        if self._on_auth is not None:
+            self._on_auth(self)
+
+    def _finish_login(self) -> BotIdentity:
         self.access_token = self._client.cookies.get("AccessToken", "")
         if not self.access_token:
             raise DaouAuthError("AccessToken cookie not present in login response")
@@ -440,7 +517,7 @@ class BotClient:
         # cannot use the cheap refresh endpoint.
         self.refresh_token = self._client.cookies.get("RefreshToken", "")
 
-        self.identity = self.whoami()
+        self.identity = self.whoami(recover=False)
         logger.info(
             "Logged in as %s (user_id=%s, company=%s)",
             self.identity.login_id,
@@ -498,11 +575,17 @@ class BotClient:
         falls back to full re-login.
         """
         url = f"{self._base_url}{failed_path}"
+        epoch = self._session_epoch
         resp = self._client.post(
             "/api/portal/public/auth/refresh/login",
             content=url.encode("utf-8"),
             headers={"Content-Type": "application/json", **self.get_auth_headers()},
         )
+        # A server-side failure says nothing about the RefreshToken: surface it
+        # as an HTTP error so callers retry instead of treating the session as
+        # rejected (which, for OTP accounts, needs a human to log in again).
+        if resp.status_code >= HTTP_SERVER_ERROR:
+            resp.raise_for_status()
         body = resp.json() if resp.content else {}
         if resp.status_code != HTTP_OK:
             raise DaouAuthError(
@@ -519,6 +602,13 @@ class BotClient:
                     code="PORTAL-0901",
                 )
             raise DaouAuthError(f"Refresh rejected: {body}", code=refresh_code)
+        if epoch != self._session_epoch:
+            # adopt_session() replaced the session while this refresh was in flight: the
+            # result belongs to the old session. Drop it (and the cookies it set) so it
+            # cannot overwrite or later resurrect the old tokens; the caller's retry uses
+            # the adopted session.
+            self._client.cookies.clear()
+            return
         new_access = self._client.cookies.get("AccessToken", "")
         if not new_access:
             raise DaouAuthError("Refresh response did not set a new AccessToken")
@@ -564,20 +654,27 @@ class BotClient:
         headers = {**headers, **self.get_auth_headers()}
         return self._client.request(method, path, headers=headers, **kwargs)
 
-    def whoami(self) -> BotIdentity:
-        """Resolve the logged-in account's own identity via GraphQL ``me``."""
-        resp = self._client.post(
-            "/api/portal/graphql",
-            json={
-                "operationName": "userSessionQuery",
-                "query": (
-                    "query userSessionQuery { me { id name loginId "
-                    "company { id uuid domain name } } }"
-                ),
-                "variables": {},
-            },
-            headers=self.get_auth_headers(),
-        )
+    def whoami(self, *, recover: bool = True) -> BotIdentity:
+        """Resolve the logged-in account's own identity via GraphQL ``me``.
+
+        With ``recover`` (the default) an expired AccessToken is refreshed
+        through the usual 401 path, so a client built from a saved session
+        can resolve its identity after the ~30 minute token has lapsed.
+        Login itself passes ``recover=False`` to avoid re-entering login.
+        """
+        payload = {
+            "operationName": "userSessionQuery",
+            "query": (
+                "query userSessionQuery { me { id name loginId company { id uuid domain name } } }"
+            ),
+            "variables": {},
+        }
+        if recover:
+            resp = self._api("POST", "/api/portal/graphql", json=payload)
+        else:
+            resp = self._client.post(
+                "/api/portal/graphql", json=payload, headers=self.get_auth_headers()
+            )
         resp.raise_for_status()
         me = (resp.json().get("data") or {}).get("me") or {}
         company = me.get("company") or {}
@@ -846,10 +943,7 @@ class BotClient:
         if not target:
             return []
         tree = self._fetch_user_tree(target)
-        return [
-            OrganizationMember.model_validate(member)
-            for member in _walk_member_nodes(tree)
-        ]
+        return [OrganizationMember.model_validate(member) for member in _walk_member_nodes(tree)]
 
     def get_organization_members(self) -> list[OrganizationMember]:
         """Return every member in the tenant's organization chart.
@@ -881,9 +975,7 @@ class BotClient:
                     walk(child)
 
         walk("")
-        return sorted(
-            found.values(), key=lambda member: (member.departmentNamePath, member.name)
-        )
+        return sorted(found.values(), key=lambda member: (member.departmentNamePath, member.name))
 
     def _fetch_user_tree(self, target_user_id: str) -> list[dict]:
         return self._fetch_tree({"targetUserId": target_user_id})

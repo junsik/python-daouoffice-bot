@@ -263,9 +263,16 @@ class DaouBot:
                 "for unattended re-authentication, or run `daoubot login`."
             ) from e
 
-    async def stop(self) -> None:
+    async def stop(self, *, logout: bool = True) -> None:
+        """Stop polling and, by default, end the server session.
+
+        Pass ``logout=False`` to keep the session for the next run — needed
+        when the session came from an interactive OTP login that cannot be
+        repeated unattended.
+        """
         self._engine.stop()
-        await asyncio.to_thread(self._client.logout)
+        if logout:
+            await asyncio.to_thread(self._client.logout)
 
     async def run_forever(self) -> None:
         """Run until SIGINT/SIGTERM (Ctrl-C, ``systemctl stop``) or error.

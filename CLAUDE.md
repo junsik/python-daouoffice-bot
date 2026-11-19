@@ -19,6 +19,7 @@
 - 온보딩: `daoubot login` → `~/.daoubot/profile.yaml`(홈 디렉터리 기준, 실행 cwd 무관 — `~/.aws`/`~/.docker` 류 관례)(테넌트·신원·세션 토큰·**비밀번호**). 데몬이 무인 자동 재로그인하려면 비밀번호가 필요하므로 프로필에 저장한다 — 파일은 `chmod 600`·`.daoubot/` gitignore, 그리고 **stdout 출력 시에만 `****` 마스킹**. 한 호스트에 봇 여러 개는 `--config`/`config_path` 로 프로필 파일을 분리한다. (`profile.json` 형식 프로필이 있으면 SDK 가 그것도 읽어들이며, 다음 save 부터 yaml 로 재작성한다.)
 - `DaouBot()` 은 인자 없이도 동작: 모든 연결값(비밀번호 포함)을 **명시 인자 > `DAOU_*` env > 다운스트림 앱 YAML 의 `daouoffice:` 섹션(`DAOU_APP_CONFIG`/`app_config=`, 읽기 전용) > `profile.yaml`** 순으로 해석한다. 별도 API(`from_env` 류)는 두지 않고 env 오버라이드는 *문서로만* 안내한다.
 - 토큰(~30분) 만료 시 저장된 비밀번호로 무한 자동 재로그인하고, 새 토큰을 프로필에 다시 저장한다. 비밀번호가 전혀 없으면 명확한 에러로 멈춘다(사용자에게 재로그인을 강요하지 않음).
+- 모바일 OTP 계정(`PORTAL-0902`)은 비밀번호 재로그인이 OTP 단계에서 멈춘다(`DaouOtpRequired`). 이런 계정은 사람이 OTP 로 만든 세션을 RefreshToken 으로 이어 쓰는 세션 운영이 기본이다 — `whoami()` 는 갱신 경로를 거치고, 세션을 유지하는 종료는 `stop(logout=False)`, 외부에서 만든 세션 반영은 `adopt_session()`.
 
 ## 보안
 

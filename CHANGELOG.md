@@ -4,6 +4,17 @@
 
 ## [Unreleased]
 
+### 추가됨
+
+- 모바일 OTP(2차 인증) 로그인. 로그인 응답이 `PORTAL-0902` 이면 `BotClient.login()` 이 `DaouOtpRequired` 를 던지고, 같은 클라이언트의 `verify_otp(code)` 가 OTP 를 제출해 세션을 완성한다. `daoubot login` 은 대화형 터미널에서 OTP 를 입력받는다.
+- `BotClient.adopt_session(other)` — 다른 클라이언트가 인증한 세션으로 바꾼다. 이전 세션의 쿠키를 버려 갱신이 낡은 RefreshToken 으로 돌아가지 않는다. 바꾸는 동안 진행 중이던 갱신의 결과는 버려 새 세션을 덮어쓰지 않는다.
+- `DaouBot.stop(logout=False)` — 서버 세션을 유지한 채 폴링만 멈춘다.
+
+### 변경됨
+
+- `BotClient.whoami()` 가 401 을 받으면 RefreshToken 갱신 경로를 거친다. 저장된 세션으로 기동한 클라이언트가 AccessToken 만료 뒤에도 신원을 확인한다. 로그인 내부 호출은 `recover=False` 로 갱신하지 않는다.
+- RefreshToken 갱신이 서버 오류(5xx)로 실패하면 `DaouAuthError` 가 아니라 `httpx.HTTPStatusError` 를 낸다. 세션 거절과 일시 장애를 구분해, 호출자가 재시도할 수 있다.
+
 ## [0.3.0] — 2026-08-06
 
 ### 추가됨

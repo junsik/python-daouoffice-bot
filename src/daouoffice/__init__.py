@@ -16,6 +16,7 @@ from daouoffice.client import (
     ChatRoomItem,
     DaouAuthError,
     DaouConfigError,
+    DaouOtpRequired,
     NewMessage,
     RoomOpenData,
 )
@@ -37,6 +38,7 @@ __all__ = (
     "DaouAuthError",
     "DaouBot",
     "DaouConfigError",
+    "DaouOtpRequired",
     "FileCursorStore",
     "MemoryCursorStore",
     "NewMessage",
